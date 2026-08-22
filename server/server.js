@@ -37,7 +37,8 @@ const userPackRoutes =
 const app = express();
 const adminKycRoutes =
   require("./routes/adminKycRoutes");
-
+const walletRoutes =
+  require("./routes/walletRoutes");
 // =====================================================
 // DEBUG ENV
 // =====================================================
@@ -156,7 +157,10 @@ app.use(
   adminKycRoutes
 );
 
-
+app.use(
+  "/api/wallet",
+  walletRoutes
+);
 
 
 
