@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Register() {
   const navigate = useNavigate();
 
@@ -31,53 +33,50 @@ export default function Register() {
   const [success, setSuccess] = useState("");
 
   const handleChange = (event) => {
-    setForm({
-      ...form,
+    setForm((prev) => ({
+      ...prev,
       [event.target.name]: event.target.value,
-    });
+    }));
+    if (error) setError("");
+  };
 
-    setError("");
+  const validateForm = () => {
+    if (!form.name || !form.email || !form.password || !form.confirmPassword) {
+      return "Please complete all fields.";
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email)) {
+      return "Please enter a valid email address.";
+    }
+    if (form.password.length < 6) {
+      return "Password must contain at least 6 characters.";
+    }
+    if (form.password !== form.confirmPassword) {
+      return "Passwords do not match.";
+    }
+    return null;
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
     setError("");
     setSuccess("");
 
-    if (
-      !form.name ||
-      !form.email ||
-      !form.password ||
-      !form.confirmPassword
-    ) {
-      setError("Please complete all fields.");
-      return;
-    }
-
-    if (form.password.length < 6) {
-      setError("Password must contain at least 6 characters.");
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await fetch("http://localhost:5000/api/auth/register", {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-        },
-
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name,
-          email: form.email,
+          name: form.name.trim(),
+          email: form.email.trim(),
           password: form.password,
         }),
       });
@@ -91,16 +90,13 @@ export default function Register() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      setSuccess("Account created successfully.");
+      setSuccess("Account created successfully redirecting...");
 
       setTimeout(() => {
         navigate("/dashboard");
-      }, 500);
-    } catch (error) {
-      setError(
-        error.message || "Something went wrong. Please try again."
-      );
-    }  finally {
+      }, 600);
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
       setLoading(false);
     }
   };
@@ -109,13 +105,13 @@ export default function Register() {
     <div className="min-h-screen bg-[#F7F7F8] text-[#2C2E33] flex flex-col items-center justify-between p-6 font-sans">
       <div className="w-full max-w-md flex flex-col items-center mt-4">
         {/* Logo Header */}
-            <div>
-  <img
-    src="https://www.ripit.co/assets/ripit-logo-x4.webp"
-    alt="RIPIT"
-    className="h-10 w-auto object-contain"
-  />
-</div>
+        <div className="mb-6">
+          <img
+            src="https://www.ripit.co/assets/ripit-logo-x4.webp"
+            alt="RIPIT"
+            className="h-10 w-auto object-contain"
+          />
+        </div>
 
         <div className="w-full">
           {/* Section Header */}
@@ -129,7 +125,6 @@ export default function Register() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name */}
             <Input
               label="Full name"
               name="name"
@@ -140,7 +135,6 @@ export default function Register() {
               icon={UserRound}
             />
 
-            {/* Email */}
             <Input
               label="Email address"
               name="email"
@@ -151,7 +145,6 @@ export default function Register() {
               icon={Mail}
             />
 
-            {/* Password */}
             <PasswordInput
               label="Password"
               name="password"
@@ -162,7 +155,6 @@ export default function Register() {
               setVisible={setShowPassword}
             />
 
-            {/* Confirm password */}
             <PasswordInput
               label="Confirm password"
               name="confirmPassword"
@@ -173,11 +165,9 @@ export default function Register() {
               setVisible={setShowConfirmPassword}
             />
 
-            {/* Alerts */}
             {error && <Alert type="error" message={error} />}
             {success && <Alert type="success" message={success} />}
 
-            {/* Submit Actions */}
             <div className="flex items-center gap-3 pt-3">
               <Link
                 to="/login"
@@ -210,7 +200,6 @@ export default function Register() {
             </div>
           </form>
 
-          {/* Footer Direct Navigation */}
           <div className="mt-6 text-center">
             <Link
               to="/login"
@@ -222,7 +211,6 @@ export default function Register() {
         </div>
       </div>
 
-      {/* Page Footer */}
       <footer className="mt-8 text-center text-[11px] text-gray-400 space-y-1">
         <p>
           Powered by <span className="font-bold text-gray-500">stripe</span>
@@ -245,15 +233,11 @@ export default function Register() {
   );
 }
 
-/* =========================================================
-   INPUT
-========================================================= */
-
 function Input({ label, name, type, placeholder, value, onChange, icon: Icon }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-bold text-[#DC2626]">
-        {label}*
+      <label className="mb-1.5 block text-xs font-bold text-gray-700">
+        {label} <span className="text-red-500">*</span>
       </label>
 
       <div className="relative">
@@ -277,10 +261,6 @@ function Input({ label, name, type, placeholder, value, onChange, icon: Icon }) 
   );
 }
 
-/* =========================================================
-   PASSWORD INPUT
-========================================================= */
-
 function PasswordInput({
   label,
   name,
@@ -292,8 +272,8 @@ function PasswordInput({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-bold text-[#DC2626]">
-        {label}*
+      <label className="mb-1.5 block text-xs font-bold text-gray-700">
+        {label} <span className="text-red-500">*</span>
       </label>
 
       <div className="relative">
@@ -325,10 +305,6 @@ function PasswordInput({
     </div>
   );
 }
-
-/* =========================================================
-   ALERT
-========================================================= */
 
 function Alert({ type, message }) {
   const isSuccess = type === "success";
