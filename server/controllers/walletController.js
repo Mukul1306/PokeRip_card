@@ -1,27 +1,29 @@
 const mongoose = require("mongoose");
 
 const Wallet = require("../models/Wallet");
+const WalletTransaction = require("../models/WalletTransaction");
+
+
 
 
 // =====================================================
-// GET WALLET
+// GET MY WALLET
 // GET /api/wallet
 // =====================================================
 
 const getWallet = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
 
     let wallet = await Wallet.findOne({
       user: userId,
     });
 
-    // Create wallet automatically
+    // Create wallet automatically for first-time user
     if (!wallet) {
       wallet = await Wallet.create({
         user: userId,
         balance: 0,
-        transactions: [],
       });
     }
 
@@ -31,7 +33,6 @@ const getWallet = async (req, res) => {
         wallet,
       },
     });
-
   } catch (error) {
     console.error("Get wallet error:", error);
 
@@ -42,255 +43,209 @@ const getWallet = async (req, res) => {
   }
 };
 
-
 // =====================================================
-// GET WALLET BALANCE
-// GET /api/wallet/balance
+// CREATE DEPOSIT REQUEST
+// POST /api/wallet/deposit
 // =====================================================
 
-const getWalletBalance = async (req, res) => {
+const createDepositRequest = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
 
-    let wallet = await Wallet.findOne({
-      user: userId,
-    });
+    const { amount, note } = req.body;
 
-    if (!wallet) {
-      wallet = await Wallet.create({
-        user: userId,
-        balance: 0,
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        balance: wallet.balance,
-      },
-    });
-
-  } catch (error) {
-    console.error(
-      "Wallet balance error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message: "Unable to get wallet balance",
-    });
-  }
-};
-
-
-// =====================================================
-// ADD MONEY
-// POST /api/wallet/add
-// =====================================================
-
-const addMoney = async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    const {
-      amount,
-      reason = "Wallet top-up",
-      reference = null,
-    } = req.body;
-
-    const money = Number(amount);
+    const depositAmount = Number(amount);
 
     if (
-      !Number.isFinite(money) ||
-      money <= 0
+      !Number.isFinite(depositAmount) ||
+      depositAmount <= 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid amount",
+        message: "Enter a valid deposit amount",
       });
     }
 
-    if (money > 100000) {
+    // Optional maximum
+    if (depositAmount > 1000000) {
+      return res.status(400).json({
+        success: false,
+        message: "Deposit amount is too large",
+      });
+    }
+
+    // Check existing pending deposit
+    const existingRequest =
+      await WalletTransaction.findOne({
+        user: userId,
+        type: "DEPOSIT",
+        status: "PENDING",
+      });
+
+    if (existingRequest) {
       return res.status(400).json({
         success: false,
         message:
-          "Maximum wallet top-up is ₹100000",
+          "You already have a pending deposit request",
       });
     }
 
-    let wallet = await Wallet.findOne({
-      user: userId,
-    });
-
-    if (!wallet) {
-      wallet = await Wallet.create({
+    const transaction =
+      await WalletTransaction.create({
         user: userId,
-        balance: 0,
+        type: "DEPOSIT",
+        amount: depositAmount,
+        status: "PENDING",
+        note: note || "",
       });
-    }
 
-    wallet.balance += money;
-
-    wallet.transactions.unshift({
-      type: "CREDIT",
-      amount: money,
-      balanceAfter: wallet.balance,
-      reason,
-      reference,
-    });
-
-    await wallet.save();
-
-    return res.status(200).json({
+    return res.status(201).json({
       success: true,
-      message: "Money added successfully",
+      message:
+        "Deposit request submitted successfully",
       data: {
-        balance: wallet.balance,
-        transaction:
-          wallet.transactions[0],
+        transaction,
       },
     });
-
   } catch (error) {
     console.error(
-      "Add money error:",
+      "Create deposit request error:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Unable to add money",
+      message:
+        "Unable to create deposit request",
     });
   }
 };
 
-
 // =====================================================
-// DEDUCT MONEY
-// POST /api/wallet/deduct
+// CREATE WITHDRAWAL REQUEST
+// POST /api/wallet/withdraw
 // =====================================================
 
-const deductMoney = async (req, res) => {
+const createWithdrawalRequest = async (
+  req,
+  res
+) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
 
-    const {
-      amount,
-      reason = "Wallet payment",
-      reference = null,
-    } = req.body;
+    const { amount, note } = req.body;
 
-    const money = Number(amount);
+    const withdrawalAmount = Number(amount);
 
     if (
-      !Number.isFinite(money) ||
-      money <= 0
+      !Number.isFinite(withdrawalAmount) ||
+      withdrawalAmount <= 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid amount",
+        message: "Enter a valid withdrawal amount",
       });
     }
 
-    /*
-      Atomic update prevents two requests
-      from spending the same balance.
-    */
-
-    const wallet = await Wallet.findOneAndUpdate(
-      {
-        user: userId,
-        balance: {
-          $gte: money,
-        },
-      },
-      {
-        $inc: {
-          balance: -money,
-        },
-      },
-      {
-        new: true,
-      }
-    );
+    const wallet = await Wallet.findOne({
+      user: userId,
+    });
 
     if (!wallet) {
+      return res.status(400).json({
+        success: false,
+        message: "Wallet not found",
+      });
+    }
+
+    if (
+      withdrawalAmount >
+      Number(wallet.balance)
+    ) {
       return res.status(400).json({
         success: false,
         message: "Insufficient wallet balance",
       });
     }
 
-    wallet.transactions.unshift({
-      type: "DEBIT",
-      amount: money,
-      balanceAfter: wallet.balance,
-      reason,
-      reference,
-    });
+    // Prevent multiple pending withdrawals
+    const existingRequest =
+      await WalletTransaction.findOne({
+        user: userId,
+        type: "WITHDRAWAL",
+        status: "PENDING",
+      });
 
-    await wallet.save();
+    if (existingRequest) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "You already have a pending withdrawal request",
+      });
+    }
 
-    return res.status(200).json({
+    const transaction =
+      await WalletTransaction.create({
+        user: userId,
+        type: "WITHDRAWAL",
+        amount: withdrawalAmount,
+        status: "PENDING",
+        note: note || "",
+      });
+
+    return res.status(201).json({
       success: true,
-      message: "Money deducted successfully",
+      message:
+        "Withdrawal request submitted successfully",
       data: {
-        balance: wallet.balance,
-        transaction:
-          wallet.transactions[0],
+        transaction,
       },
     });
-
   } catch (error) {
     console.error(
-      "Deduct money error:",
+      "Create withdrawal request error:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Unable to deduct money",
+      message:
+        "Unable to create withdrawal request",
     });
   }
 };
 
-
 // =====================================================
-// TRANSACTION HISTORY
+// GET MY TRANSACTIONS
 // GET /api/wallet/transactions
 // =====================================================
 
-const getTransactions = async (req, res) => {
+const getWalletTransactions = async (
+  req,
+  res
+) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
 
-    const wallet = await Wallet.findOne({
-      user: userId,
-    }).lean();
-
-    if (!wallet) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          balance: 0,
-          transactions: [],
-        },
-      });
-    }
+    const transactions =
+      await WalletTransaction.find({
+        user: userId,
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .limit(100)
+        .lean();
 
     return res.status(200).json({
       success: true,
       data: {
-        balance: wallet.balance,
-        transactions:
-          wallet.transactions || [],
+        transactions,
       },
     });
-
   } catch (error) {
     console.error(
-      "Wallet transactions error:",
+      "Get wallet transactions error:",
       error
     );
 
@@ -302,11 +257,9 @@ const getTransactions = async (req, res) => {
   }
 };
 
-
 module.exports = {
   getWallet,
-  getWalletBalance,
-  addMoney,
-  deductMoney,
-  getTransactions,
+  createDepositRequest,
+  createWithdrawalRequest,
+  getWalletTransactions,
 };

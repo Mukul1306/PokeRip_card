@@ -88,9 +88,63 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
+useEffect(() => {
+  fetchDashboard();
+  fetchWalletBalance();
+}, []);
+
+  // =====================================================
+// FETCH WALLET BALANCE
+// =====================================================
+
+const fetchWalletBalance = async () => {
+  try {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    const response = await fetch(
+      `${API_URL}/api/wallet`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    console.log("Wallet API response:", data);
+
+    if (!response.ok) {
+      throw new Error(
+        data.message || "Unable to fetch wallet"
+      );
+    }
+
+    // Supports common backend response structures
+    const balance =
+      data?.wallet?.balance ??
+      data?.data?.balance ??
+      data?.data?.wallet?.balance ??
+      data?.balance ??
+      0;
+
+    setWalletBalance(Number(balance));
+  } catch (error) {
+    console.error(
+      "Wallet fetch error:",
+      error
+    );
+
+    setWalletBalance(0);
+  }
+};
 
   // =====================================================
   // LOGOUT
@@ -148,27 +202,23 @@ export default function Dashboard() {
 
     {/* WALLET */}
 
-    <button
-      onClick={() =>
-        navigate("/wallet")
-      }
-      className="flex items-center gap-1.5 rounded-full bg-white px-3 py-2 shadow-sm"
-    >
+<button
+  onClick={() => navigate("/wallet")}
+  className="flex items-center gap-1.5 rounded-full bg-white px-3 py-2 shadow-sm"
+>
+  <Wallet
+    size={15}
+    className="text-[#238bdc]"
+  />
 
-      <Wallet
-        size={15}
-        className="text-[#238bdc]"
-      />
+  <span className="text-[11px] font-black">
+    ${walletBalance.toFixed(2)}
+  </span>
 
-      <span className="text-[11px] font-black">
-        ${walletBalance.toFixed(2)}
-      </span>
-
-      <span className="text-[13px] font-black text-[#238bdc]">
-        +
-      </span>
-
-    </button>
+  <span className="text-[13px] font-black text-[#238bdc]">
+    +
+  </span>
+</button>
 
 
     {/* LOGOUT */}

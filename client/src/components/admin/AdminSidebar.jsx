@@ -60,6 +60,11 @@ const navigation = [
     icon: ShoppingBag,
   },
   {
+  label: "Wallet",
+  path: "/admin/wallet",
+  icon: WalletCards,
+},
+  {
     label: "Openings",
     path: "/admin/openings",
     icon: PackageCheck,

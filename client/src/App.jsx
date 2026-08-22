@@ -19,9 +19,11 @@ import AdminPackOdds from "./pages/admin/AdminPackOdds";
 import AdminInventory from "./pages/admin/AdminInventory";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminKyc from "./pages/admin/AdminKyc";
-
+import AdminWallet from "./pages/admin/AdminWallet";
 import Kyc from "./pages/Kyc";
 import Profile from "./pages/Profile";
+import ResetPassword from "./pages/ResetPassword";
+import Wallet from "./pages/Wallet";
 
 function App() {
   return (
@@ -78,6 +80,15 @@ function App() {
           path="/profile"
           element={<Profile />}
         />
+  <Route
+  path="/reset-password/:token"
+  element={<ResetPassword />}
+/>
+
+<Route
+  path="/wallet"
+  element={<Wallet />}
+/>
 
         {/* =========================
             ADMIN
@@ -93,6 +104,11 @@ function App() {
             index
             element={<AdminDashboard />}
           />
+          <Route
+  path="/admin/wallet"
+  element={<AdminWallet />}
+/>
+
 
           {/* /admin/users */}
           <Route

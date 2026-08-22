@@ -2,61 +2,44 @@ const express = require("express");
 
 const router = express.Router();
 
+const protect = require("../middleware/auth");
+
 const {
   getWallet,
-  getWalletBalance,
-  addMoney,
-  deductMoney,
-  getTransactions,
+  createDepositRequest,
+  createWithdrawalRequest,
+  getWalletTransactions,
 } = require("../controllers/walletController");
 
-// Change this path to your actual authentication middleware
-const auth = require("../middleware/auth");
-
-
 // =====================================================
-// WALLET
+// GET WALLET
 // =====================================================
 
 router.get(
   "/",
-  auth,
+  protect,
   getWallet
 );
 
-
 // =====================================================
-// BALANCE
-// =====================================================
-
-router.get(
-  "/balance",
-  auth,
-  getWalletBalance
-);
-
-
-// =====================================================
-// ADD MONEY
+// DEPOSIT REQUEST
 // =====================================================
 
 router.post(
-  "/add",
-  auth,
-  addMoney
+  "/deposit",
+  protect,
+  createDepositRequest
 );
 
-
 // =====================================================
-// DEDUCT MONEY
+// WITHDRAW REQUEST
 // =====================================================
 
 router.post(
-  "/deduct",
-  auth,
-  deductMoney
+  "/withdraw",
+  protect,
+  createWithdrawalRequest
 );
-
 
 // =====================================================
 // TRANSACTIONS
@@ -64,9 +47,8 @@ router.post(
 
 router.get(
   "/transactions",
-  auth,
-  getTransactions
+  protect,
+  getWalletTransactions
 );
-
 
 module.exports = router;

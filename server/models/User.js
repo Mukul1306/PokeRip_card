@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
+    // =========================
+    // USER INFORMATION
+    // =========================
     name: {
       type: String,
       required: true,
@@ -22,58 +25,81 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
     },
 
+    // =========================
+    // USER ROLE
+    // =========================
     role: {
       type: String,
       enum: ["USER", "ADMIN"],
       default: "USER",
     },
 
-kyc: {
-  status: {
-    type: String,
-    enum: [
-      "NOT_STARTED",
-      "PENDING",
-      "VERIFIED",
-      "REJECTED",
-      "REQUIRES_RETRY",
-    ],
-    default: "NOT_STARTED",
-  },
+    // =========================
+    // KYC
+    // =========================
+    kyc: {
+      status: {
+        type: String,
+        enum: [
+          "NOT_STARTED",
+          "PENDING",
+          "VERIFIED",
+          "REJECTED",
+          "REQUIRES_RETRY",
+        ],
+        default: "NOT_STARTED",
+      },
 
-  provider: {
-    type: String,
-    enum: ["PERSONA"],
-    default: "PERSONA",
-  },
+      provider: {
+        type: String,
+        enum: ["PERSONA"],
+        default: "PERSONA",
+      },
 
-  inquiryId: {
-    type: String,
-    default: null,
-  },
+      inquiryId: {
+        type: String,
+        default: null,
+      },
 
-  verificationId: {
-    type: String,
-    default: null,
-  },
+      verificationId: {
+        type: String,
+        default: null,
+      },
 
-  verifiedAt: {
-    type: Date,
-    default: null,
-  },
+      verifiedAt: {
+        type: Date,
+        default: null,
+      },
 
-  rejectionReason: {
-    type: String,
-    default: null,
-  },
-},
+      rejectionReason: {
+        type: String,
+        default: null,
+      },
+    },
 
+    // =========================
+    // PASSWORD RESET
+    // =========================
+    passwordResetToken: {
+      type: String,
+      default: null,
+    },
+
+    passwordResetExpires: {
+      type: Date,
+      default: null,
+    },
+
+    // =========================
+    // ACCOUNT STATUS
+    // =========================
     status: {
       type: String,
       enum: ["ACTIVE", "SUSPENDED"],
       default: "ACTIVE",
     },
   },
+
   {
     timestamps: true,
   }

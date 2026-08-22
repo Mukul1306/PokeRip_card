@@ -13,6 +13,7 @@ import {
   Wallet,
   ShoppingBag,
   Sparkles,
+  LockKeyhole,
 } from "lucide-react";
 import {
   useNavigate,
@@ -28,6 +29,55 @@ export default function Profile() {
 
   const navigate =
     useNavigate();
+    const [passwordEmailLoading, setPasswordEmailLoading] = useState(false);
+const [passwordEmailMessage, setPasswordEmailMessage] = useState("");
+const [passwordEmailError, setPasswordEmailError] = useState("");
+
+const handleChangePassword = async () => {
+  try {
+    setPasswordEmailLoading(true);
+    setPasswordEmailMessage("");
+    setPasswordEmailError("");
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    const response = await fetch(
+      `${API_URL}/api/auth/request-password-change`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message || "Unable to send password change email"
+      );
+    }
+
+    setPasswordEmailMessage(
+      "Password change link has been sent to your registered email."
+    );
+  } catch (error) {
+    console.error("Change password error:", error);
+
+    setPasswordEmailError(
+      error.message || "Unable to send password change email"
+    );
+  } finally {
+    setPasswordEmailLoading(false);
+  }
+};
 
   const [kycStatus, setKycStatus] =
     useState("NOT_STARTED");
@@ -379,6 +429,122 @@ export default function Profile() {
 
         </section>
 
+        {/* =================================================
+    CHANGE PASSWORD
+================================================= */}
+
+<section className="mt-7">
+
+  <p
+    className="
+      mb-2
+      px-1
+      font-['Plus_Jakarta_Sans',sans-serif]
+      text-[10px]
+      font-extrabold
+      uppercase
+      tracking-[0.16em]
+      text-[#999]
+    "
+  >
+    Account Security
+  </p>
+
+  <button
+    onClick={handleChangePassword}
+    disabled={passwordEmailLoading}
+    className="
+      flex
+      w-full
+      items-center
+      justify-between
+      rounded-[16px]
+      bg-white
+      px-[15px]
+      py-[15px]
+      text-left
+      transition
+      active:scale-[0.99]
+      disabled:opacity-60
+    "
+  >
+
+    <div className="flex items-center gap-3">
+
+      <div
+        className="
+          flex
+          h-[40px]
+          w-[40px]
+          items-center
+          justify-center
+          rounded-full
+          bg-[#eaf5ff]
+        "
+      >
+        <LockKeyhole
+          size={21}
+          className="text-[#2698F3]"
+        />
+      </div>
+
+      <div>
+
+        <p
+          className="
+            font-['Plus_Jakarta_Sans',sans-serif]
+            text-[12px]
+            font-extrabold
+            text-[#111214]
+          "
+        >
+          Change Password
+        </p>
+
+        <p
+          className="
+            mt-[3px]
+            font-['Plus_Jakarta_Sans',sans-serif]
+            text-[10px]
+            font-medium
+            text-[#777]
+          "
+        >
+          Send a password change link to your email
+        </p>
+
+      </div>
+
+    </div>
+
+    {passwordEmailLoading ? (
+      <Loader2
+        size={18}
+        className="animate-spin text-[#2698F3]"
+      />
+    ) : (
+      <ChevronRight
+        size={18}
+        className="text-[#999]"
+      />
+    )}
+
+  </button>
+
+  {passwordEmailMessage && (
+    <p className="mt-2 px-1 text-[11px] font-semibold text-green-600">
+      {passwordEmailMessage}
+    </p>
+  )}
+
+  {passwordEmailError && (
+    <p className="mt-2 px-1 text-[11px] font-semibold text-red-500">
+      {passwordEmailError}
+    </p>
+  )}
+
+</section>
+       
 
         {/* =================================================
             WALLET

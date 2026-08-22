@@ -1,6 +1,6 @@
 const Pack = require("../models/Pack");
 const Order = require("../models/Order");
-
+const Wallet = require("../models/Wallet");
 // =====================================================
 // GET USER DASHBOARD
 // GET /api/user/dashboard
@@ -20,6 +20,23 @@ const getUserDashboard = async (req, res) => {
     }
 
     // =================================================
+// USER WALLET
+// =================================================
+
+let wallet = await Wallet.findOne({
+  user: userId,
+});
+
+if (!wallet) {
+  wallet = await Wallet.create({
+    user: userId,
+    balance: 0,
+  });
+}
+
+const walletBalance = Number(wallet.balance || 0);
+
+    // =================================================
     // GET PUBLISHED PACKS
     // =================================================
 
@@ -35,24 +52,7 @@ const getUserDashboard = async (req, res) => {
       })
       .lean();
 
-    // DEBUG
-    console.log(
-      "USER DASHBOARD PACKS:",
-      packs.length
-    );
-    console.log("=================================");
-console.log("USER DASHBOARD PACK COUNT:", packs.length);
-console.log("PACKS:", packs);
-console.log("=================================");
 
-    console.log(
-      packs.map((pack) => ({
-        id: pack._id,
-        name: pack.name,
-        price: pack.price,
-        status: pack.status,
-      }))
-    );
 
     // =================================================
     // USER ORDERS
@@ -116,20 +116,23 @@ console.log("=================================");
       success: true,
 
       data: {
-        packs,
+  packs,
+  orders,
 
-        orders,
+  // IMPORTANT
+  walletBalance,
 
-        stats: {
-          totalPacks,
-          totalOrders: orders.length,
-          totalSpent,
+  stats: {
+    totalPacks,
+    totalOrders: orders.length,
+    totalSpent,
 
-          // We will connect these later
-          totalOpenings: 0,
-          collectionCount: 0,
-        },
-      },
+    totalOpenings: 0,
+    collectionCount: 0,
+
+    walletBalance,
+  },
+},
     });
 
   } catch (error) {
