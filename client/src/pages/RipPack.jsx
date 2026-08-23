@@ -536,9 +536,7 @@ export default function RipPack() {
 
 <div className="mt-[24px] flex justify-center">
   <button
-    onClick={() => {
-      console.log("Rip pack:", pack._id);
-    }}
+   onClick={() => navigate(`/buy/${pack._id}`)}
     className="
       flex
       h-[34px]
@@ -556,7 +554,7 @@ export default function RipPack() {
       active:scale-[0.97]
     "
   >
-    Rip Now
+    Buy Now
     <span className="text-[15px] leading-none">
       →
     </span>

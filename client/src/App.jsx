@@ -24,6 +24,10 @@ import Kyc from "./pages/Kyc";
 import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword";
 import Wallet from "./pages/Wallet";
+import BuyPack from "./pages/BuyPack";
+import Collection from "./pages/Collection";
+
+import PackReveal from "./pages/PackReveal";
 
 function App() {
   return (
@@ -84,10 +88,22 @@ function App() {
   path="/reset-password/:token"
   element={<ResetPassword />}
 />
-
+<Route
+  path="/buy/:packId"
+  element={<BuyPack />}
+/>
 <Route
   path="/wallet"
   element={<Wallet />}
+/>
+<Route
+  path="/collection"
+  element={<Collection />}
+/>
+
+<Route
+  path="/reveal/:userPackId"
+  element={<PackReveal />}
 />
 
         {/* =========================

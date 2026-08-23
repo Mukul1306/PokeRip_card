@@ -39,10 +39,14 @@ const adminKycRoutes =
   require("./routes/adminKycRoutes");
 const walletRoutes =
   require("./routes/walletRoutes");
- 
+ const collectionRoutes =
+  require("./routes/collectionRoutes");
 
 const adminWalletRoutes =
   require("./routes/adminWalletRoutes");
+  const ripRoutes =
+  require("./routes/ripRoutes");
+  
 // =====================================================
 // DEBUG ENV
 // =====================================================
@@ -165,14 +169,19 @@ app.use(
   "/api/wallet",
   walletRoutes
 );
-
-
+app.use(
+  "/api/collection",
+  collectionRoutes
+);
 
 app.use(
   "/api/admin/wallet",
   adminWalletRoutes
 );
-
+app.use(
+  "/api/rip",
+  ripRoutes
+);
 
 
 

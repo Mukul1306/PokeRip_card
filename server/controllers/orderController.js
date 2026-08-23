@@ -5,6 +5,7 @@ const Pack = require("../models/Pack");
 const User = require("../models/User");
 const Wallet = require("../models/Wallet");
 const WalletTransaction = require("../models/WalletTransaction");
+const UserPack = require("../models/UserPack");
 
 // =====================================================
 // TEST PURCHASE
@@ -541,6 +542,37 @@ const createOrder = async (req, res) => {
       ],
       { session }
     );
+
+// =====================================================
+// CREATE USER PACK
+// =====================================================
+
+// Total physical cards available inside the pack
+const cardsTotal = pack.cards.reduce(
+  (total, packCard) =>
+    total + Number(packCard.quantity || 0),
+  0
+);
+
+const cardsRemaining = cardsTotal;
+
+await UserPack.create(
+  [
+    {
+      user: userId,
+      pack: pack._id,
+      quantity: qty,
+
+      cardsTotal,
+      cardsRemaining,
+      cardsRipped: 0,
+
+      status: "AVAILABLE",
+    },
+  ],
+  { session }
+);
+
 
     // =================================================
     // WALLET TRANSACTION
