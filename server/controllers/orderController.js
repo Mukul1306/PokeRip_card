@@ -3,7 +3,8 @@ const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const Pack = require("../models/Pack");
 const User = require("../models/User");
-
+const Wallet = require("../models/Wallet");
+const WalletTransaction = require("../models/WalletTransaction");
 
 // =====================================================
 // TEST PURCHASE
@@ -415,9 +416,190 @@ const getOrderById = async (
   }
 };
 
+const createOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const userId = req.user.id;
+    const { packId, quantity = 1 } = req.body;
+
+    const qty = Number(quantity);
+
+    if (!packId) {
+      return res.status(400).json({
+        success: false,
+        message: "Pack ID is required",
+      });
+    }
+
+    if (!Number.isInteger(qty) || qty <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quantity",
+      });
+    }
+
+    // Start transaction
+    session.startTransaction();
+
+    // =================================================
+    // GET PACK
+    // =================================================
+
+    const pack = await Pack.findById(packId).session(session);
+
+    if (!pack) {
+      await session.abortTransaction();
+
+      return res.status(404).json({
+        success: false,
+        message: "Pack not found",
+      });
+    }
+
+    if (pack.status !== "PUBLISHED") {
+      await session.abortTransaction();
+
+      return res.status(400).json({
+        success: false,
+        message: "This pack is not available",
+      });
+    }
+
+    const packPrice = Number(pack.price || 0);
+    const totalAmount = packPrice * qty;
+
+    if (totalAmount <= 0) {
+      await session.abortTransaction();
+
+      return res.status(400).json({
+        success: false,
+        message: "Invalid pack price",
+      });
+    }
+
+    // =================================================
+    // GET USER WALLET
+    // =================================================
+
+    const wallet = await Wallet.findOne({
+      user: userId,
+    }).session(session);
+
+    if (!wallet) {
+      await session.abortTransaction();
+
+      return res.status(400).json({
+        success: false,
+        message: "Wallet not found",
+      });
+    }
+
+    // =================================================
+    // CHECK BALANCE
+    // =================================================
+
+    if (Number(wallet.balance) < totalAmount) {
+      await session.abortTransaction();
+
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient wallet balance. Required $${totalAmount.toFixed(
+          2
+        )}`,
+      });
+    }
+
+    // =================================================
+    // DEDUCT WALLET
+    // =================================================
+
+    wallet.balance =
+      Number(wallet.balance) - totalAmount;
+
+    await wallet.save({ session });
+
+    // =================================================
+    // CREATE ORDER
+    // =================================================
+
+    const order = await Order.create(
+      [
+        {
+          user: userId,
+          pack: pack._id,
+          quantity: qty,
+          amount: totalAmount,
+
+          paymentStatus: "PAID",
+
+          // Keep this if your Order model has it
+         orderStatus: "COMPLETED",
+
+          paymentMethod: "WALLET",
+        },
+      ],
+      { session }
+    );
+
+    // =================================================
+    // WALLET TRANSACTION
+    // =================================================
+
+    await WalletTransaction.create(
+      [
+        {
+          user: userId,
+          type: "PURCHASE",
+          amount: totalAmount,
+          status: "APPROVED",
+          note: `Purchased ${qty} x ${pack.name}`,
+        },
+      ],
+      { session }
+    );
+
+    // =================================================
+    // COMMIT EVERYTHING
+    // =================================================
+
+    await session.commitTransaction();
+
+    return res.status(201).json({
+      success: true,
+      message: "Pack purchased successfully",
+
+      data: {
+        order: order[0],
+        walletBalance: wallet.balance,
+      },
+    });
+
+  } catch (error) {
+
+    await session.abortTransaction();
+
+    console.error(
+      "Create order error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to purchase pack",
+    });
+
+  } finally {
+    session.endSession();
+  }
+};
+
+
+
 
 module.exports = {
   createTestOrder,
   getAllOrders,
   getOrderById,
+  createOrder,
 };

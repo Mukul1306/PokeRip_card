@@ -1,19 +1,35 @@
 const express = require("express");
 
 const {
+  createOrder,
   createTestOrder,
-} = require(
-  "../controllers/orderController"
+} = require("../controllers/orderController");
+
+const protect = require("../middleware/auth");
+
+const router = express.Router();
+
+
+// =====================================================
+// REAL PACK PURCHASE
+// POST /api/orders
+// =====================================================
+
+router.post(
+  "/",
+  protect,
+  createOrder
 );
 
-const router =
-  express.Router();
 
-
+// =====================================================
 // TEST PURCHASE
+// POST /api/orders/test
+// =====================================================
 
 router.post(
   "/test",
+  protect,
   createTestOrder
 );
 

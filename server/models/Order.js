@@ -32,11 +32,11 @@ const orderSchema = new mongoose.Schema(
       default: "INR",
     },
 
-    paymentMethod: {
-      type: String,
-      enum: ["TEST", "STRIPE"],
-      default: "TEST",
-    },
+  paymentMethod: {
+  type: String,
+  enum: ["TEST", "STRIPE", "WALLET"],
+  default: "TEST",
+},
 
     paymentStatus: {
       type: String,
