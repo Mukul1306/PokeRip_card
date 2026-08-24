@@ -690,294 +690,237 @@ const recognizePokemonCard = async (
 // FIND CARD IN POKEWALLET API
 // =====================================================
 
+
+
 const findPokeWalletCard = async ({
   name,
   setCode,
   number,
 }) => {
   try {
-    const apiKey =
-      process.env.POKEWALLET_API_KEY;
-
-    console.log(
-      "PokéWallet key loaded:",
-      !!apiKey
-    );
+    const apiKey = process.env.POKEWALLET_API_KEY;
 
     if (!apiKey) {
-      throw new Error(
-        "POKEWALLET_API_KEY is missing"
-      );
+      throw new Error("POKEWALLET_API_KEY is missing");
     }
 
-    // -------------------------------------------------
-    // NORMALIZE OCR DATA
-    // -------------------------------------------------
+    // =====================================================
+    // NORMALIZE INPUT
+    // =====================================================
 
-    const normalizedName =
-      String(name || "")
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
+    const normalizedName = String(name || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
 
-    const normalizedSetCode =
-      String(setCode || "")
-        .toUpperCase()
-        .trim();
+    const normalizedSetCode = String(setCode || "")
+      .toUpperCase()
+      .trim();
 
-    const normalizedNumber =
-      String(number || "")
-        .split("/")[0]
-        .replace(/^0+/, "")
-        .trim();
+    const normalizedNumber = String(number || "")
+      .split("/")[0]
+      .replace(/^0+/, "")
+      .trim();
 
-    console.log(
-      "PokéWallet search data:",
-      {
-        name: normalizedName,
-        setCode: normalizedSetCode,
-        number: normalizedNumber,
-      }
-    );
+    console.log("=================================");
+    console.log("CARD MATCH INPUT");
+    console.log({
+      name: normalizedName,
+      setCode: normalizedSetCode,
+      number: normalizedNumber,
+    });
+    console.log("=================================");
 
-    // -------------------------------------------------
-    // SEARCH POKEWALLET
-    // -------------------------------------------------
+    // =====================================================
+    // WE NEED STRONG IDENTIFICATION
+    // =====================================================
 
-    // If OCR found the name, search by name.
-    // Otherwise search using set code + number.
-    const searchQuery =
-      normalizedName ||
-      `${normalizedSetCode} ${normalizedNumber}`;
-
-    if (!searchQuery.trim()) {
+    if (!normalizedSetCode || !normalizedNumber) {
       console.log(
-        "No usable search data"
+        "Not enough information to identify exact card."
       );
 
       return null;
     }
 
+    // =====================================================
+    // SEARCH USING SET + NUMBER
+    // =====================================================
+
+    const searchQuery =
+      `${normalizedSetCode} ${normalizedNumber}`;
+
     console.log(
-      "Searching PokéWallet for:",
+      "Searching PokéWallet:",
       searchQuery
     );
 
-    const response =
-      await axios.get(
-        "https://api.pokewallet.io/search",
-        {
-          params: {
-            q: searchQuery,
-            limit: 100,
-          },
+    const response = await axios.get(
+      "https://api.pokewallet.io/search",
+      {
+        params: {
+          q: searchQuery,
+          limit: 100,
+        },
 
-          headers: {
-            "X-API-Key": apiKey,
-          },
+        headers: {
+          "X-API-Key": apiKey,
+        },
 
-          timeout: 30000,
-        }
-      );
+        timeout: 30000,
+      }
+    );
 
     const results =
       response.data?.results || [];
 
     console.log(
-      "PokéWallet search results:",
+      "PokéWallet results:",
       results.length
     );
 
     if (!results.length) {
+      console.log(
+        "No PokéWallet results."
+      );
+
       return null;
     }
 
-    // -------------------------------------------------
-    // STEP 1: FILTER BY SET CODE
-    // -------------------------------------------------
+    // =====================================================
+    // EXACT SET + NUMBER MATCH
+    // =====================================================
 
-    let candidates = results;
+    const exactMatches = results.filter(
+      (item) => {
+        const cardInfo =
+          item.card_info || {};
 
-    if (normalizedSetCode) {
+        const resultSetCode =
+          String(
+            cardInfo.set_code || ""
+          )
+            .toUpperCase()
+            .trim();
 
-      const setMatches =
-        candidates.filter((item) => {
+        const resultNumber =
+          String(
+            cardInfo.card_number || ""
+          )
+            .split("/")[0]
+            .replace(/^0+/, "")
+            .trim();
 
-          const cardInfo =
-            item.card_info || {};
-
-          const resultSetCode =
-            String(
-              cardInfo.set_code || ""
-            )
-              .toUpperCase()
-              .trim();
-
-          return (
-            resultSetCode ===
-            normalizedSetCode
-          );
-        });
-
-      console.log(
-        "Set code matches:",
-        setMatches.length
-      );
-
-      if (setMatches.length > 0) {
-        candidates = setMatches;
-      }
-    }
-
-    // -------------------------------------------------
-    // STEP 2: FILTER BY CARD NUMBER
-    // -------------------------------------------------
-
-    if (normalizedNumber) {
-
-      const numberMatches =
-        candidates.filter((item) => {
-
-          const cardInfo =
-            item.card_info || {};
-
-          const resultNumber =
-            String(
-              cardInfo.card_number || ""
-            )
-              .split("/")[0]
-              .replace(/^0+/, "")
-              .trim();
-
-          return (
-            resultNumber ===
+        return (
+          resultSetCode ===
+            normalizedSetCode &&
+          resultNumber ===
             normalizedNumber
-          );
-        });
-
-      console.log(
-        "Set + number matches:",
-        numberMatches.length
-      );
-
-      if (numberMatches.length > 0) {
-
-        const selectedCard =
-          numberMatches[0];
-
-        console.log(
-          "SELECTED BY SET + NUMBER:",
-          {
-            name:
-              selectedCard.card_info?.name,
-
-            number:
-              selectedCard.card_info?.card_number,
-
-            setName:
-              selectedCard.card_info?.set_name,
-
-            setCode:
-              selectedCard.card_info?.set_code,
-
-            id:
-              selectedCard.id,
-          }
         );
-
-        return selectedCard;
       }
-    }
-
-    // -------------------------------------------------
-    // STEP 3: TRY NAME MATCH
-    // -------------------------------------------------
-
-    if (normalizedName) {
-
-      const nameMatches =
-        candidates.filter((item) => {
-
-          const cardInfo =
-            item.card_info || {};
-
-          const resultName =
-            String(
-              cardInfo.name || ""
-            )
-              .toLowerCase()
-              .replace(/\s+/g, " ")
-              .trim();
-
-          return (
-            resultName ===
-              normalizedName ||
-
-            resultName.includes(
-              normalizedName
-            ) ||
-
-            normalizedName.includes(
-              resultName
-            )
-          );
-        });
-
-      console.log(
-        "Name matches:",
-        nameMatches.length
-      );
-
-      if (nameMatches.length > 0) {
-
-        const selectedCard =
-          nameMatches[0];
-
-        console.log(
-          "SELECTED BY NAME:",
-          {
-            name:
-              selectedCard.card_info?.name,
-
-            number:
-              selectedCard.card_info?.card_number,
-
-            setName:
-              selectedCard.card_info?.set_name,
-
-            setCode:
-              selectedCard.card_info?.set_code,
-
-            id:
-              selectedCard.id,
-          }
-        );
-
-        return selectedCard;
-      }
-    }
-
-    // -------------------------------------------------
-    // NO MATCH
-    // -------------------------------------------------
+    );
 
     console.log(
-      "No matching PokéWallet card found:",
-      {
-        name,
-        setCode,
-        number,
+      "EXACT SET + NUMBER MATCHES:",
+      exactMatches.length
+    );
+
+    // =====================================================
+    // EXACTLY ONE MATCH
+    // =====================================================
+
+    if (exactMatches.length === 1) {
+      const selectedCard =
+        exactMatches[0];
+
+      console.log(
+        "✅ EXACT CARD SELECTED:",
+        {
+          id: selectedCard.id,
+
+          name:
+            selectedCard.card_info?.name,
+
+          number:
+            selectedCard.card_info?.card_number,
+
+          setCode:
+            selectedCard.card_info?.set_code,
+
+          setName:
+            selectedCard.card_info?.set_name,
+        }
+      );
+
+      return selectedCard;
+    }
+
+    // =====================================================
+    // MULTIPLE MATCHES
+    // =====================================================
+
+    if (exactMatches.length > 1) {
+      console.log(
+        "⚠️ Multiple exact cards found."
+      );
+
+      // Try exact name as a SECOND confirmation
+      if (normalizedName) {
+        const nameMatches =
+          exactMatches.filter(
+            (item) => {
+              const resultName =
+                String(
+                  item.card_info?.name ||
+                    ""
+                )
+                  .toLowerCase()
+                  .replace(/\s+/g, " ")
+                  .trim();
+
+              return (
+                resultName ===
+                normalizedName
+              );
+            }
+          );
+
+        console.log(
+          "Exact name confirmations:",
+          nameMatches.length
+        );
+
+        if (nameMatches.length === 1) {
+          return nameMatches[0];
+        }
       }
+
+      console.log(
+        "❌ Cannot safely determine card."
+      );
+
+      return null;
+    }
+
+    // =====================================================
+    // NO EXACT MATCH
+    // =====================================================
+
+    console.log(
+      "❌ No exact set + number match."
+    );
+
+    console.log(
+      "Will NOT fallback to name."
     );
 
     return null;
 
   } catch (error) {
-
     console.error(
       "PokéWallet API error:",
       error.response?.data ||
-      error.message
+        error.message
     );
 
     return null;
@@ -1107,6 +1050,7 @@ if (!tcgId && !name && !req.file) {
 }
 
 let detectedCardNumber = "";
+
 let detectedSetCode = "";
 
 // -------------------------------------------------
@@ -1144,11 +1088,18 @@ if (!tcgId && !name && req.file) {
 // EXTRACT CARD NUMBER FROM OCR
 // ---------------------------------------------
 
-
-
 const numberMatch = ocrText.match(
-  /#\s*(\d{1,3}(?:\/\d{1,3})?)/
+  /#\s*(\d{1,3})(?:\s*\/\s*(\d{1,3}))?/i
 );
+
+if (numberMatch) {
+  detectedCardNumber = numberMatch[1].trim();
+
+  console.log(
+    "Detected card number:",
+    detectedCardNumber
+  );
+}
 
 if (numberMatch) {
   detectedCardNumber = numberMatch[1].trim();
@@ -1214,23 +1165,20 @@ if (nameMatch) {
 
 if (!name) {
 
-  const gradeMatch =
-    ocrText.match(
-      /\b([A-Z][A-Z0-9.'’& -]{2,40})\s+(?:NM-MT|NM|LP|MP|HP|DMG|MINT)\b/i
-    );
+ const gradeMatch = ocrText.match(
+  /\b([A-Z][A-Z0-9.'’&-]*(?:\s+[A-Z][A-Z0-9.'’&-]*){0,4})\s+(MINT|NM-MT|NM|LP|MP|HP|DMG)\b/i
+);
 
-  if (gradeMatch) {
+if (gradeMatch) {
+  name = gradeMatch[1]
+    .replace(/\s+/g, " ")
+    .trim();
 
-    name =
-      gradeMatch[1]
-        .replace(/\s+/g, " ")
-        .trim();
-
-    console.log(
-      "Detected card name:",
-      name
-    );
-  }
+  console.log(
+    "Detected card name:",
+    name
+  );
+}
 }
 
 // -------------------------------------------------
