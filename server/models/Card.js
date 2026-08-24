@@ -3,11 +3,10 @@ const mongoose = require("mongoose");
 const cardSchema = new mongoose.Schema(
   {
     tcgId: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-    },
+  type: String,
+  default: "",
+  index: true,
+},
 
     name: {
       type: String,
@@ -102,6 +101,13 @@ const cardSchema = new mongoose.Schema(
       },
     },
 
+    cardmarket: {
+      url: {
+        type: String,
+        default: "",
+      },
+    },
+
     tcgplayer: {
       url: {
         type: String,
@@ -109,6 +115,31 @@ const cardSchema = new mongoose.Schema(
       },
 
       prices: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+    },
+
+    // =========================
+    // POKEWALLET
+    // =========================
+    pokeWallet: {
+      id: {
+        type: String,
+        default: "",
+      },
+
+      cardInfo: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+
+      tcgplayer: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+
+      cardmarket: {
         type: mongoose.Schema.Types.Mixed,
         default: {},
       },

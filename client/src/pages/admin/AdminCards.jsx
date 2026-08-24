@@ -87,7 +87,7 @@ export default function AdminCards() {
       setLoadingSearch(true);
 
       const token =
-        localStorage.getItem("token");
+        localStorage.getItem("adminToken");
 
       const params =
         new URLSearchParams({
@@ -162,7 +162,7 @@ export default function AdminCards() {
       setLoadingLibrary(true);
 
       const token =
-        localStorage.getItem("token");
+        localStorage.getItem("adminToken");
 
       const params =
         new URLSearchParams({
@@ -245,7 +245,7 @@ export default function AdminCards() {
       setAddingId(card.id);
 
       const token =
-        localStorage.getItem("token");
+        localStorage.getItem("adminToken");
 
       const response =
         await fetch(
@@ -338,7 +338,7 @@ export default function AdminCards() {
       );
 
       const token =
-        localStorage.getItem("token");
+        localStorage.getItem("adminToken");
 
       const response =
         await fetch(
@@ -659,17 +659,24 @@ export default function AdminCards() {
                             <td className="px-5 py-4">
 
                               <div className="flex items-center gap-3">
+                                 {console.log("LIBRARY CARD:", card)}
 
-                                <img
-                                  src={
-                                    card.imageSmall
-                                  }
-                                  alt={
-                                    card.name
-                                  }
-                                  className="h-16 w-12 rounded-lg object-cover shadow-sm"
-                                />
-
+                                
+<img
+  src={
+    card.pokeWallet?.id
+      ? `${API_URL}/api/admin/inventory/image/${card.pokeWallet.id}?size=low`
+      : card.imageSmall ||
+        card.imageLarge ||
+        "https://via.placeholder.com/150x210?text=No+Image"
+  }
+  alt={card.name}
+  className="h-16 w-12 rounded-lg object-cover shadow-sm"
+  onError={(e) => {
+    console.error("IMAGE FAILED:", e.currentTarget.src);
+  }}
+/>                                
+                              
                                 <div>
 
                                   <p className="text-xs font-black">

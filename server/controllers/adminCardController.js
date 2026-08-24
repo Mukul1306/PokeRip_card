@@ -149,7 +149,7 @@ const searchCards = async (req, res) => {
 
           totalPages: Math.ceil(
             (result.totalCount || 0) /
-              pageSize
+            pageSize
           ),
         },
       },
@@ -158,7 +158,7 @@ const searchCards = async (req, res) => {
     console.error(
       "Search Pokemon cards error:",
       error.response?.data ||
-        error.message
+      error.message
     );
 
     return res.status(500).json({
@@ -211,6 +211,12 @@ const addCard = async (req, res) => {
         message: "Card not found",
       });
     }
+    console.log("========== CARD IMAGE DEBUG ==========");
+    console.log("TCG ID:", pokemonCard.id);
+    console.log("CARD NAME:", pokemonCard.name);
+    console.log("IMAGE SMALL:", pokemonCard.images?.small);
+    console.log("IMAGE LARGE:", pokemonCard.images?.large);
+    console.log("======================================");
 
     const card =
       await Card.create({

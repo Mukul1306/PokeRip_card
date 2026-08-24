@@ -48,7 +48,7 @@ export default function AdminUsers() {
     try {
       setLoading(true);
 
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("adminToken");
 
       const params = new URLSearchParams({
         page,
@@ -138,7 +138,7 @@ export default function AdminUsers() {
     try {
       setActionLoading(user._id);
 
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("adminToken");
 
       const response = await fetch(
         `${API_URL}/api/admin/users/${user._id}/status`,
@@ -204,7 +204,7 @@ export default function AdminUsers() {
     try {
       setActionLoading(user._id);
 
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("adminToken");
 
       const response = await fetch(
         `${API_URL}/api/admin/users/${user._id}`,

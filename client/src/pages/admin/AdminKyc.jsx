@@ -31,7 +31,7 @@ export default function AdminKyc() {
   // ==========================================
 
   const fetchStats = async () => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("adminToken");
 
     if (!token || token.split(".").length !== 3) {
       throw new Error("Invalid JWT format");
@@ -70,7 +70,7 @@ export default function AdminKyc() {
   // ==========================================
 
   const fetchUsers = async () => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("adminToken");
 
     if (!token || token.split(".").length !== 3) {
       throw new Error("Invalid JWT format");

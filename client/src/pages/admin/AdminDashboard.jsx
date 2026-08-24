@@ -27,7 +27,7 @@ export default function AdminDashboard() {
       setLoading(true);
       setError("");
 
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("adminToken");
 
       if (!token) {
         setError("Admin authentication required.");

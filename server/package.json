@@ -23,7 +23,8 @@
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",
     "socket.io": "^4.8.3",
-    "stripe": "^22.5.0"
+    "stripe": "^22.5.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

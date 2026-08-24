@@ -34,13 +34,9 @@ export default function AdminInventory() {
   // TOKEN
   // =====================================================
 
-  const getToken = () => {
-    return (
-      localStorage.getItem("token") ||
-      localStorage.getItem("adminToken") ||
-      localStorage.getItem("authToken")
-    );
-  };
+ const getToken = () => {
+  return localStorage.getItem("adminToken");
+};
 
   // =====================================================
   // FETCH SUMMARY
@@ -356,12 +352,22 @@ export default function AdminInventory() {
   };
 
   const getImage = (card) => {
-    return (
-      card?.imageSmall ||
-      card?.imageLarge ||
-      ""
-    );
-  };
+  if (!card) return "";
+
+  if (card.imageSmall) {
+    return card.imageSmall.startsWith("http")
+      ? card.imageSmall
+      : `${API_URL}${card.imageSmall}`;
+  }
+
+  if (card.imageLarge) {
+    return card.imageLarge.startsWith("http")
+      ? card.imageLarge
+      : `${API_URL}${card.imageLarge}`;
+  }
+
+  return "";
+};
 
   // =====================================================
   // UI
@@ -487,9 +493,8 @@ export default function AdminInventory() {
         </div>
 
         <p className="mt-3 text-xs text-gray-400">
-          The scanned card will be searched using the Pokémon TCG API.
-          If it does not already exist in your Card library, it will be
-          added automatically.
+          The scanned card will be searched using the PokéWallet API.
+If it does not already exist in your inventory, it will be added automatically.
         </p>
 
       </div>
@@ -653,8 +658,7 @@ export default function AdminInventory() {
                             </p>
 
                             <p className="mt-1 text-xs text-gray-400">
-                              {card.tcgId ||
-                                "-"}
+                              #{card.number || "-"}
                             </p>
 
                           </div>

@@ -15,8 +15,8 @@ const {
   updateInventory,
   deleteInventory,
   scanAndAddCard,
+  getPokeWalletImage,
 } = require("../controllers/adminInventoryController");
-
 
 // =====================================================
 // MULTER
@@ -112,6 +112,16 @@ router.post(
     "cardImage"
   ),
   scanAndAddCard
+);
+
+// =====================================================
+// GET POKEWALLET CARD IMAGE
+// GET /api/admin/inventory/image/:id
+// =====================================================
+
+router.get(
+  "/image/:id",
+  getPokeWalletImage
 );
 
 // =====================================================

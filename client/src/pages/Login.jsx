@@ -63,8 +63,13 @@ export default function Login() {
         throw new Error(data.message || "Login failed.");
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      if (data.user.role === "ADMIN") {
+  localStorage.setItem("adminToken", data.token);
+} else {
+  localStorage.setItem("token", data.token);
+}
+
+localStorage.setItem("user", JSON.stringify(data.user));
 
       setSuccess("Login successful.");
 
