@@ -44,8 +44,11 @@ const walletRoutes =
 
 const adminWalletRoutes =
   require("./routes/adminWalletRoutes");
-  const ripRoutes =
+const ripRoutes =
   require("./routes/ripRoutes");
+const adminReportRoutes = require(
+  "./routes/adminReportRoutes"
+);
   
 // =====================================================
 // DEBUG ENV
@@ -183,6 +186,10 @@ app.use(
   ripRoutes
 );
 
+app.use(
+  "/api/admin/report",
+  adminReportRoutes
+);
 
 
 

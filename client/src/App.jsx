@@ -26,7 +26,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Wallet from "./pages/Wallet";
 import BuyPack from "./pages/BuyPack";
 import Collection from "./pages/Collection";
-
+import AdminReport from "./pages/admin/AdminReport";
 import PackReveal from "./pages/PackReveal";
 
 function App() {
@@ -106,6 +106,7 @@ function App() {
   element={<PackReveal />}
 />
 
+
         {/* =========================
             ADMIN
         ========================= */}
@@ -124,7 +125,10 @@ function App() {
   path="/admin/wallet"
   element={<AdminWallet />}
 />
-
+<Route
+  path="/admin/reports"
+  element={<AdminReport />}
+/>
 
           {/* /admin/users */}
           <Route

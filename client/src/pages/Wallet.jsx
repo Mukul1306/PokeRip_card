@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -74,7 +75,8 @@ export default function Wallet() {
 
       setBalance(
         Number(
-          data.data?.wallet?.balance || 0
+          data.data?.wallet?.balance ||
+            0
         )
       );
     } catch (error) {
@@ -116,7 +118,8 @@ export default function Wallet() {
         }
 
         setTransactions(
-          data.data?.transactions || []
+          data.data?.transactions ||
+            []
         );
       } catch (error) {
         console.error(
@@ -125,6 +128,10 @@ export default function Wallet() {
         );
       }
     };
+
+  // =====================================================
+  // INITIAL LOAD
+  // =====================================================
 
   useEffect(() => {
     if (!token) {
@@ -137,7 +144,7 @@ export default function Wallet() {
   }, []);
 
   // =====================================================
-  // SUBMIT REQUEST
+  // SUBMIT DEPOSIT / WITHDRAWAL REQUEST
   // =====================================================
 
   const submitRequest =
@@ -206,8 +213,8 @@ export default function Wallet() {
         setNote("");
         setModal(null);
 
-        fetchWallet();
-        fetchTransactions();
+        await fetchWallet();
+        await fetchTransactions();
       } catch (error) {
         alert(error.message);
       } finally {
@@ -216,7 +223,7 @@ export default function Wallet() {
     };
 
   // =====================================================
-  // STATUS
+  // STATUS ICON
   // =====================================================
 
   const StatusIcon = ({
@@ -253,6 +260,82 @@ export default function Wallet() {
   };
 
   // =====================================================
+  // TRANSACTION HELPERS
+  // =====================================================
+
+  const getTransactionInfo = (
+    transaction
+  ) => {
+    switch (transaction.type) {
+      case "DEPOSIT":
+        return {
+          label: "Deposit",
+          icon: (
+            <ArrowDownLeft
+              size={18}
+              className="text-green-500"
+            />
+          ),
+          iconBackground:
+            "bg-green-50",
+          amountColor:
+            "text-green-500",
+          prefix: "+",
+        };
+
+      case "WITHDRAWAL":
+        return {
+          label: "Withdrawal",
+          icon: (
+            <ArrowUpRight
+              size={18}
+              className="text-red-500"
+            />
+          ),
+          iconBackground:
+            "bg-red-50",
+          amountColor:
+            "text-red-500",
+          prefix: "-",
+        };
+
+      case "PURCHASE":
+        return {
+          label: "Purchased",
+          icon: (
+            <WalletIcon
+              size={18}
+              className="text-blue-500"
+            />
+          ),
+          iconBackground:
+            "bg-blue-50",
+          amountColor:
+            "text-blue-500",
+          prefix: "-",
+        };
+
+      default:
+        return {
+          label:
+            transaction.type ||
+            "Transaction",
+          icon: (
+            <WalletIcon
+              size={18}
+              className="text-gray-500"
+            />
+          ),
+          iconBackground:
+            "bg-gray-50",
+          amountColor:
+            "text-gray-500",
+          prefix: "",
+        };
+    }
+  };
+
+  // =====================================================
   // LOADING
   // =====================================================
 
@@ -273,35 +356,49 @@ export default function Wallet() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-[#101114]">
+
       <main className="mx-auto min-h-screen w-full max-w-[520px] bg-[#f5f5f5] px-4 pb-10">
 
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <header className="flex items-center gap-3 py-5">
+
           <button
             onClick={() =>
               navigate(-1)
             }
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm"
           >
-            <ArrowLeft size={17} />
+            <ArrowLeft
+              size={17}
+            />
           </button>
 
           <h1 className="text-xl font-black">
             Wallet
           </h1>
+
         </header>
 
-        {/* BALANCE */}
+
+        {/* =================================================
+            BALANCE
+        ================================================= */}
 
         <section className="rounded-3xl bg-[#238bdc] p-6 text-white shadow-sm">
 
           <div className="flex items-center gap-2">
-            <WalletIcon size={18} />
+
+            <WalletIcon
+              size={18}
+            />
 
             <span className="text-xs font-bold opacity-80">
               Available Balance
             </span>
+
           </div>
 
           <div className="mt-3 text-4xl font-black">
@@ -311,7 +408,10 @@ export default function Wallet() {
 
         </section>
 
-        {/* ACTIONS */}
+
+        {/* =================================================
+            ACTIONS
+        ================================================= */}
 
         <section className="mt-4 grid grid-cols-2 gap-3">
 
@@ -321,13 +421,16 @@ export default function Wallet() {
             }
             className="flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-4 font-black shadow-sm"
           >
+
             <Plus
               size={18}
               className="text-[#238bdc]"
             />
 
             Add Money
+
           </button>
+
 
           <button
             onClick={() =>
@@ -335,25 +438,35 @@ export default function Wallet() {
             }
             className="flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-4 font-black shadow-sm"
           >
+
             <ArrowUpRight
               size={18}
               className="text-red-500"
             />
 
             Withdraw
+
           </button>
 
         </section>
 
-        {/* INFO */}
+
+        {/* =================================================
+            INFO
+        ================================================= */}
 
         <div className="mt-4 rounded-2xl bg-white p-4 text-xs text-gray-500 shadow-sm">
+
           Deposit and withdrawal requests are
           reviewed by the admin. Your wallet
           balance changes only after approval.
+
         </div>
 
-        {/* TRANSACTIONS */}
+
+        {/* =================================================
+            TRANSACTIONS
+        ================================================= */}
 
         <section className="mt-6">
 
@@ -361,21 +474,28 @@ export default function Wallet() {
             Transactions
           </h2>
 
-          {transactions.length === 0 ? (
+
+          {transactions.length ===
+          0 ? (
+
             <div className="rounded-2xl bg-white p-8 text-center text-sm text-gray-400">
               No transactions yet.
             </div>
+
           ) : (
+
             <div className="space-y-2">
 
               {transactions.map(
                 (transaction) => {
 
-                  const isDeposit =
-                    transaction.type ===
-                    "DEPOSIT";
+                  const transactionInfo =
+                    getTransactionInfo(
+                      transaction
+                    );
 
                   return (
+
                     <div
                       key={
                         transaction._id
@@ -385,99 +505,161 @@ export default function Wallet() {
 
                       <div className="flex items-center justify-between">
 
+
+                        {/* =================================================
+                            LEFT SIDE
+                        ================================================= */}
+
                         <div className="flex items-center gap-3">
 
                           <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                              isDeposit
-                                ? "bg-green-50"
-                                : "bg-red-50"
-                            }`}
+                            className={`flex h-10 w-10 items-center justify-center rounded-full ${transactionInfo.iconBackground}`}
                           >
-                            {isDeposit ? (
-                              <ArrowDownLeft
-                                size={18}
-                                className="text-green-500"
-                              />
-                            ) : (
-                              <ArrowUpRight
-                                size={18}
-                                className="text-red-500"
-                              />
-                            )}
+                            {
+                              transactionInfo.icon
+                            }
                           </div>
 
+
                           <div>
+
                             <p className="text-sm font-black">
-                              {isDeposit
-                                ? "Deposit"
-                                : "Withdrawal"}
+
+                              {
+                                transactionInfo.label
+                              }
+
                             </p>
 
+
                             <p className="text-[10px] text-gray-400">
-                              {new Date(
-                                transaction.createdAt
-                              ).toLocaleString()}
+
+                              {transaction.createdAt
+                                ? new Date(
+                                    transaction.createdAt
+                                  ).toLocaleString()
+                                : "-"}
+
                             </p>
+
+
+                            {/* PURCHASE NOTE */}
+
+                            {transaction.type ===
+                              "PURCHASE" &&
+                              transaction.note && (
+
+                                <p className="mt-1 max-w-[230px] truncate text-[10px] text-gray-400">
+
+                                  {
+                                    transaction.note
+                                  }
+
+                                </p>
+
+                              )}
+
+
+                            {/* OTHER NOTES */}
+
+                            {transaction.type !==
+                              "PURCHASE" &&
+                              transaction.note && (
+
+                                <p className="mt-1 max-w-[230px] truncate text-[10px] text-gray-400">
+
+                                  {
+                                    transaction.note
+                                  }
+
+                                </p>
+
+                              )}
+
                           </div>
 
                         </div>
 
+
+                        {/* =================================================
+                            RIGHT SIDE
+                        ================================================= */}
+
                         <div className="text-right">
 
                           <p
-                            className={`text-sm font-black ${
-                              isDeposit
-                                ? "text-green-500"
-                                : "text-red-500"
-                            }`}
+                            className={`text-sm font-black ${transactionInfo.amountColor}`}
                           >
-                            {isDeposit
-                              ? "+"
-                              : "-"}
+
+                            {
+                              transactionInfo.prefix
+                            }
+
                             $
                             {Number(
-                              transaction.amount
+                              transaction.amount ||
+                                0
                             ).toFixed(2)}
+
                           </p>
 
+
                           <div className="mt-1 flex items-center justify-end gap-1 text-[10px] font-bold">
+
                             <StatusIcon
                               status={
                                 transaction.status
                               }
                             />
 
-                            {transaction.status}
+                            {
+                              transaction.status
+                            }
+
                           </div>
 
                         </div>
 
                       </div>
 
+
+                      {/* =================================================
+                          REJECTION REASON
+                      ================================================= */}
+
                       {transaction.rejectionReason && (
+
                         <p className="mt-3 rounded-xl bg-red-50 p-2 text-xs text-red-600">
+
                           {
                             transaction.rejectionReason
                           }
+
                         </p>
+
                       )}
 
                     </div>
+
                   );
                 }
               )}
 
             </div>
+
           )}
 
         </section>
 
       </main>
 
-      {/* MODAL */}
+
+      {/* =================================================
+          MODAL
+      ================================================= */}
 
       {modal && (
+
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
 
           <div className="w-full max-w-[430px] rounded-3xl bg-white p-6">
@@ -485,10 +667,13 @@ export default function Wallet() {
             <div className="flex items-center justify-between">
 
               <h2 className="text-xl font-black">
+
                 {modal === "deposit"
                   ? "Add Money"
                   : "Withdraw Money"}
+
               </h2>
+
 
               <button
                 onClick={() =>
@@ -496,16 +681,24 @@ export default function Wallet() {
                 }
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100"
               >
-                <X size={16} />
+
+                <X
+                  size={16}
+                />
+
               </button>
 
             </div>
 
+
             <p className="mt-2 text-xs text-gray-500">
+
               {modal === "deposit"
                 ? "Submit a deposit request. Admin approval is required."
                 : "Submit a withdrawal request. Admin approval is required."}
+
             </p>
+
 
             <input
               type="number"
@@ -521,6 +714,7 @@ export default function Wallet() {
               className="mt-5 w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-[#238bdc]"
             />
 
+
             <textarea
               value={note}
               onChange={(e) =>
@@ -533,13 +727,17 @@ export default function Wallet() {
               className="mt-3 w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#238bdc]"
             />
 
+
             <button
-              disabled={submitting}
+              disabled={
+                submitting
+              }
               onClick={
                 submitRequest
               }
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#238bdc] py-3 text-sm font-black text-white disabled:opacity-50"
             >
+
               {submitting && (
                 <Loader2
                   size={16}
@@ -548,11 +746,13 @@ export default function Wallet() {
               )}
 
               Submit Request
+
             </button>
 
           </div>
 
         </div>
+
       )}
 
     </div>
