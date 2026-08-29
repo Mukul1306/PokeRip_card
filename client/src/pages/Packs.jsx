@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-
 import {
   ArrowLeft,
   ArrowRight,
@@ -8,99 +7,77 @@ import {
   Sparkles,
   AlertCircle,
 } from "lucide-react";
-
 import { Link } from "react-router-dom";
 
-
-// =====================================================
-// API
-// =====================================================
-
 const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000";
-
-
-// =====================================================
-// PACKS PAGE
-// =====================================================
+  import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Packs() {
   const [packs, setPacks] = useState([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // =====================================================
   // LOAD PACKS
   // =====================================================
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadPacks = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    const loadPacks = async () => {
-      try {
-        setLoading(true);
-        setError("");
+      const response = await fetch(
+        `${API_URL}/api/user/packs`
+      );
 
-        const response = await fetch(
-          `${API_URL}/api/user/packs`
+      const contentType =
+        response.headers.get("content-type") || "";
+
+      let data;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+
+        throw new Error(
+          text ||
+            "Server returned an invalid response."
         );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-              "Unable to load packs"
-          );
-        }
-
-        const loadedPacks =
-          data.data?.packs ??
-          data.packs ??
-          (Array.isArray(data.data)
-            ? data.data
-            : []);
-
-        if (!cancelled) {
-          setPacks(
-            Array.isArray(loadedPacks)
-              ? loadedPacks
-              : []
-          );
-        }
-      } catch (err) {
-        console.error(
-          "Load packs error:",
-          err
-        );
-
-        if (!cancelled) {
-          setError(
-            err.message ||
-              "Unable to load packs"
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
       }
-    };
 
+      if (!response.ok) {
+        throw new Error(
+          data?.message || "Unable to load packs"
+        );
+      }
+
+      const loadedPacks =
+        data?.data?.packs ||
+        data?.packs ||
+        data?.data ||
+        [];
+
+      setPacks(
+        Array.isArray(loadedPacks)
+          ? loadedPacks
+          : []
+      );
+    } catch (err) {
+      console.error("Load packs error:", err);
+
+      setError(
+        err?.message ||
+          "Unable to load packs"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadPacks();
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
-
 
   // =====================================================
   // LOADING
@@ -108,25 +85,20 @@ export default function Packs() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f5f5f5]">
-
+      <div className="flex min-h-screen items-center justify-center bg-[#f5f5f5] px-4">
         <div className="flex flex-col items-center gap-3">
-
           <Loader2
-            size={34}
+            size={32}
             className="animate-spin text-[#238bdc]"
           />
 
           <p className="text-sm font-semibold text-gray-500">
             Loading packs...
           </p>
-
         </div>
-
-      </main>
+      </div>
     );
   }
-
 
   // =====================================================
   // ERROR
@@ -134,59 +106,44 @@ export default function Packs() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-[#f5f5f5] px-5 py-8">
-
+      <div className="min-h-screen bg-[#f5f5f5] px-4 py-8 sm:px-5">
         <div className="mx-auto max-w-xl">
 
           <Link
             to="/"
-            className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-gray-600 transition hover:text-black"
+            className="mb-8 flex items-center gap-2 text-sm font-bold text-gray-600 transition hover:text-black"
           >
             <ArrowLeft size={17} />
-
             Back Home
           </Link>
 
+          <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
 
-          <div className="rounded-3xl bg-white p-10 text-center shadow-sm">
+            <AlertCircle
+              size={40}
+              className="mx-auto text-red-500"
+            />
 
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
-
-              <AlertCircle
-                size={34}
-                className="text-red-500"
-              />
-
-            </div>
-
-
-            <h1 className="mt-5 text-2xl font-black">
+            <h2 className="mt-4 text-xl font-black">
               Unable to load packs
-            </h1>
+            </h2>
 
-
-            <p className="mt-2 text-sm leading-6 text-gray-500">
+            <p className="mt-2 text-sm text-gray-500">
               {error}
             </p>
 
-
             <button
-              onClick={() =>
-                window.location.reload()
-              }
+              onClick={loadPacks}
               className="mt-6 rounded-full bg-[#238bdc] px-6 py-3 text-sm font-black text-white transition hover:bg-[#177bc9]"
             >
               Try Again
             </button>
 
           </div>
-
         </div>
-
-      </main>
+      </div>
     );
   }
-
 
   // =====================================================
   // PAGE
@@ -195,35 +152,35 @@ export default function Packs() {
   return (
     <main className="min-h-screen bg-[#f5f5f5] text-[#101114]">
 
-
-      {/* =====================================================
+      {/* =================================================
           HEADER
-      ===================================================== */}
+      ================================================= */}
 
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 sm:px-8">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-5 sm:py-6">
+
+        {/* BACK */}
 
         <Link
           to="/"
-          className="flex items-center gap-2 text-sm font-bold text-gray-600 transition hover:text-black"
+          className="flex items-center gap-1.5 text-xs font-bold text-gray-600 transition hover:text-black sm:gap-2 sm:text-sm"
         >
-          <ArrowLeft size={18} />
-
-          Back
+          <ArrowLeft size={17} />
+          <span>Back Home</span>
         </Link>
 
+        {/* LOGO */}
 
-        <Link to="/">
-          <img
-            src="https://www.ripit.co/assets/ripit-logo-x4.webp"
-            alt="RIPIT"
-            className="h-10 w-auto object-contain"
-          />
-        </Link>
+        <img
+          src="https://www.ripit.co/assets/ripit-logo-x4.webp"
+          alt="RIPIT"
+          className="h-8 w-auto object-contain sm:h-10"
+        />
 
+        {/* SIGN IN */}
 
         <Link
           to="/login"
-          className="rounded-full bg-[#238bdc] px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-[#177bc9]"
+          className="rounded-full bg-[#238bdc] px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-[#177bc9] sm:px-5 sm:py-2.5 sm:text-sm"
         >
           Sign in
         </Link>
@@ -231,28 +188,30 @@ export default function Packs() {
       </header>
 
 
-      {/* =====================================================
+      {/* =================================================
           HERO
-      ===================================================== */}
+      ================================================= */}
 
-      <section className="mx-auto max-w-6xl px-5 pb-10 pt-8 sm:px-8">
+      <section className="mx-auto max-w-6xl px-4 pb-8 pt-8 sm:px-5 sm:pb-10 sm:pt-10">
 
         <div className="text-center">
 
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#238bdc]/10">
+          {/* ICON */}
 
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-[#238bdc]/10 sm:h-12 sm:w-12">
             <Package
-              size={25}
+              size={23}
               className="text-[#238bdc]"
             />
-
           </div>
 
+          {/* TITLE */}
 
-          <h1 className="mt-5 text-5xl font-black tracking-[-0.06em] sm:text-7xl">
+          <h1 className="mt-5 text-4xl font-black leading-[0.95] tracking-[-.06em] sm:text-6xl md:text-7xl">
             Pokémon Packs
           </h1>
 
+          {/* DESCRIPTION */}
 
           <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-gray-500 sm:text-base">
             Choose a pack, explore the details,
@@ -264,30 +223,26 @@ export default function Packs() {
       </section>
 
 
-      {/* =====================================================
-          PACK LIST
-      ===================================================== */}
+      {/* =================================================
+          PACKS
+      ================================================= */}
 
-      <section className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
+      <section className="mx-auto max-w-6xl px-3 pb-20 sm:px-5">
 
         {packs.length === 0 ? (
 
-          <div className="rounded-3xl bg-white p-12 text-center shadow-sm">
+          /* EMPTY */
 
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50">
+          <div className="rounded-3xl bg-white p-10 text-center shadow-sm sm:p-12">
 
-              <Package
-                size={40}
-                className="text-gray-300"
-              />
+            <Package
+              size={42}
+              className="mx-auto text-gray-300"
+            />
 
-            </div>
-
-
-            <h2 className="mt-5 text-xl font-black">
+            <h2 className="mt-4 text-xl font-black">
               No packs available
             </h2>
-
 
             <p className="mt-2 text-sm text-gray-500">
               Check back soon for new packs.
@@ -297,7 +252,16 @@ export default function Packs() {
 
         ) : (
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          /*
+            IMPORTANT:
+
+            Mobile  = 2 columns
+            Small   = 2 columns
+            Medium  = 3 columns
+            Large   = 3 columns
+          */
+
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3">
 
             {packs.map((pack) => (
               <PackCard
@@ -322,56 +286,46 @@ export default function Packs() {
 // =====================================================
 
 function PackCard({ pack }) {
+
   const price =
-    Number(pack?.price) || 0;
+    Number(pack.price) || 0;
 
   const stock =
-    Number(pack?.totalStock) || 0;
-
-
-  // Some backend responses may have
-  // category.image instead of pack.image.
+    Number(pack.totalStock) || 0;
 
   const image =
-    pack?.image ||
-    pack?.category?.image ||
+    pack.image ||
+    pack.category?.image ||
     "";
 
-
-  const isAvailable =
-    stock > 0;
-
-
   return (
-    <article className="group overflow-hidden rounded-3xl bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl sm:rounded-3xl">
 
-
-      {/* =====================================================
+      {/* =================================================
           IMAGE
-      ===================================================== */}
+      ================================================= */}
 
-      <div className="relative flex h-[360px] items-center justify-center overflow-hidden bg-[#fafafa]">
-
+      <div className="relative flex h-[210px] items-center justify-center overflow-hidden bg-[#fafafa] sm:h-[320px] md:h-[350px]">
 
         {image ? (
 
           <img
             src={image}
-            alt={pack?.name || "Pokemon pack"}
-            className="h-full w-full object-contain p-8 transition duration-500 group-hover:scale-105"
-            onError={(event) => {
-              event.currentTarget.style.display =
-                "none";
-            }}
+            alt={pack.name || "Pokemon Pack"}
+            className="h-full w-full object-contain p-2 transition duration-500 group-hover:scale-105 sm:p-6 md:p-8"
+            loading="lazy"
           />
 
         ) : (
 
-          <div className="flex flex-col items-center gap-3 text-gray-300">
+          <div className="flex flex-col items-center gap-2 text-gray-300">
 
-            <Package size={55} />
+            <Package
+              size={38}
+              className="sm:h-[55px] sm:w-[55px]"
+            />
 
-            <span className="text-xs font-bold">
+            <span className="text-[9px] font-bold sm:text-xs">
               No image
             </span>
 
@@ -380,85 +334,83 @@ function PackCard({ pack }) {
         )}
 
 
-        {/* STATUS */}
+        {/* =================================================
+            STATUS
+        ================================================= */}
 
-        <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-black shadow-sm">
+        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[8px] font-black shadow-sm sm:left-4 sm:top-4 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-[10px]">
 
           <Sparkles
-            size={12}
-            className="text-[#238bdc]"
+            size={10}
+            className="text-[#238bdc] sm:h-3 sm:w-3"
           />
 
-          {isAvailable
-            ? "AVAILABLE"
-            : "SOLD OUT"}
+          AVAILABLE
 
         </div>
 
       </div>
 
 
-      {/* =====================================================
+      {/* =================================================
           CONTENT
-      ===================================================== */}
+      ================================================= */}
 
-      <div className="p-5">
-
+      <div className="flex flex-1 flex-col p-3 sm:p-5">
 
         {/* NAME + PRICE */}
 
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-2">
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
 
-            <h2 className="truncate text-lg font-black">
-              {pack?.name || "Unnamed Pack"}
+            <h2 className="truncate text-sm font-black sm:text-lg">
+              {pack.name || "Unnamed Pack"}
             </h2>
 
-
-            {pack?.category?.name && (
-              <p className="mt-1 text-xs font-semibold text-gray-500">
+            {pack.category?.name && (
+              <p className="mt-1 truncate text-[9px] font-semibold text-gray-500 sm:text-xs">
                 {pack.category.name}
               </p>
             )}
 
           </div>
 
-
-          <p className="shrink-0 text-xl font-black">
+          <p className="shrink-0 text-sm font-black sm:text-xl">
             ${price.toFixed(2)}
           </p>
 
         </div>
 
 
-        {/* DESCRIPTION */}
+        {/* =================================================
+            DESCRIPTION
+        ================================================= */}
 
-        <p className="mt-4 line-clamp-2 text-sm leading-6 text-gray-500">
-
-          {pack?.description ||
+        <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-gray-500 sm:mt-4 sm:text-sm sm:leading-6">
+          {pack.description ||
             "Reveal a graded and authenticated collectible card."}
-
         </p>
 
 
-        {/* STOCK */}
+        {/* =================================================
+            STOCK
+        ================================================= */}
 
-        <div className="mt-4 flex items-center justify-between text-xs">
+        <div className="mt-3 flex items-center justify-between text-[9px] sm:mt-4 sm:text-xs">
 
           <span className="font-semibold text-gray-400">
-            Availability
+            Available
           </span>
 
-
           <span
-            className={
-              isAvailable
-                ? "font-black text-green-600"
-                : "font-black text-red-500"
-            }
+            className={`font-black ${
+              stock > 0
+                ? "text-green-600"
+                : "text-red-500"
+            }`}
           >
-            {isAvailable
+            {stock > 0
               ? `${stock} packs`
               : "Sold out"}
           </span>
@@ -466,23 +418,23 @@ function PackCard({ pack }) {
         </div>
 
 
-        {/* VIEW PACK */}
+        {/* =================================================
+            VIEW PACK
+        ================================================= */}
 
         <Link
           to={`/packs/${pack._id}`}
           state={{ pack }}
-          className={`group mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full text-sm font-black text-white shadow-md transition active:scale-[0.98] ${
-            isAvailable
-              ? "bg-[#238bdc] hover:bg-[#177bc9]"
-              : "cursor-pointer bg-gray-400 hover:bg-gray-500"
-          }`}
+          className="mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-[#238bdc] text-[10px] font-black text-white shadow-md transition hover:bg-[#177bc9] active:scale-[0.98] sm:mt-5 sm:h-12 sm:gap-2 sm:text-sm"
         >
 
-          View Pack
+          <span>
+            View Pack
+          </span>
 
           <ArrowRight
-            size={17}
-            className="transition-transform group-hover:translate-x-1"
+            size={13}
+            className="transition-transform group-hover:translate-x-1 sm:h-[17px] sm:w-[17px]"
           />
 
         </Link>
