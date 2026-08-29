@@ -2,8 +2,21 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const cron = require("node-cron");
 
 const connectDB = require("./config/db");
+
+// =====================================================
+// PRICE UPDATE CONTROLLER
+// =====================================================
+
+const {
+  refreshAllCardPrices,
+} = require("./controllers/adminInventoryController");
+
+// =====================================================
+// ROUTES
+// =====================================================
 
 const adminRoutes =
   require("./routes/adminRoutes");
@@ -22,34 +35,46 @@ const adminPackRoutes =
 
 const adminPackOddsRoutes =
   require("./routes/adminPackOddsRoutes");
+
 const adminInventoryRoutes =
   require("./routes/adminInventoryRoutes");
+
 const orderRoutes =
   require("./routes/orderRoutes");
+
 const kycRoutes =
   require("./routes/kycRoutes");
+
 const adminOrderRoutes =
   require("./routes/adminOrderRoutes");
+
 const userDashboardRoutes =
   require("./routes/userDashboardRoutes");
+
 const userPackRoutes =
   require("./routes/userPackRoutes");
-const app = express();
+
 const adminKycRoutes =
   require("./routes/adminKycRoutes");
+
 const walletRoutes =
   require("./routes/walletRoutes");
- const collectionRoutes =
+
+const collectionRoutes =
   require("./routes/collectionRoutes");
 
 const adminWalletRoutes =
   require("./routes/adminWalletRoutes");
+
 const ripRoutes =
   require("./routes/ripRoutes");
-const adminReportRoutes = require(
-  "./routes/adminReportRoutes"
-);
-  
+
+// =====================================================
+// APP
+// =====================================================
+
+const app = express();
+
 // =====================================================
 // DEBUG ENV
 // =====================================================
@@ -59,13 +84,60 @@ console.log(
   !!process.env.POKEMON_TCG_API_KEY
 );
 
-
 // =====================================================
 // DATABASE
 // =====================================================
 
 connectDB();
 
+// =====================================================
+// DAILY CARD PRICE UPDATE
+// Runs every day at 2:00 AM IST
+// =====================================================
+
+cron.schedule(
+  "0 2 * * *",
+  async () => {
+    console.log(
+      "========================================"
+    );
+
+    console.log(
+      "Starting daily Pokemon card price update..."
+    );
+
+    console.log(
+      "========================================"
+    );
+
+    try {
+      const result =
+        await refreshAllCardPrices();
+
+      console.log(
+        "Daily price update result:",
+        result
+      );
+
+      console.log(
+        "========================================"
+      );
+
+    } catch (error) {
+      console.error(
+        "Daily price update failed:",
+        error.message
+      );
+
+      console.log(
+        "========================================"
+      );
+    }
+  },
+  {
+    timezone: "America/New_York",
+  }
+);
 
 // =====================================================
 // MIDDLEWARE
@@ -80,18 +152,20 @@ app.use(
 
 app.use(express.json());
 
-
 // =====================================================
 // HEALTH
 // =====================================================
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "PokeRip API is running",
-  });
-});
-
+app.get(
+  "/api/health",
+  (req, res) => {
+    res.json({
+      success: true,
+      message:
+        "PokeRip API is running",
+    });
+  }
+);
 
 // =====================================================
 // AUTH
@@ -101,7 +175,6 @@ app.use(
   "/api/auth",
   require("./routes/authRoutes")
 );
-
 
 // =====================================================
 // ADMIN
@@ -141,6 +214,12 @@ app.use(
   "/api/admin/inventory",
   adminInventoryRoutes
 );
+
+
+// =====================================================
+// ORDERS
+// =====================================================
+
 app.use(
   "/api/orders",
   orderRoutes
@@ -150,28 +229,44 @@ app.use(
   "/api/admin/orders",
   adminOrderRoutes
 );
+
+// =====================================================
+// USER
+// =====================================================
+
 app.use(
   "/api/user/dashboard",
   userDashboardRoutes
 );
+
 app.use(
   "/api/user/packs",
   userPackRoutes
 );
 
+// =====================================================
+// KYC
+// =====================================================
+
 app.use(
   "/api/kyc",
   kycRoutes
 );
+
 app.use(
   "/api/admin/kyc",
   adminKycRoutes
 );
 
+// =====================================================
+// WALLET
+// =====================================================
+
 app.use(
   "/api/wallet",
   walletRoutes
 );
+
 app.use(
   "/api/collection",
   collectionRoutes
@@ -181,47 +276,56 @@ app.use(
   "/api/admin/wallet",
   adminWalletRoutes
 );
+
+// =====================================================
+// RIP
+// =====================================================
+
 app.use(
   "/api/rip",
   ripRoutes
 );
 
-app.use(
-  "/api/admin/report",
-  adminReportRoutes
-);
+// =====================================================
+// TEST PACKS
+// =====================================================
 
+app.get(
+  "/api/test-packs",
+  async (req, res) => {
+    try {
+      const Pack =
+        require("./models/Pack");
 
+      const packs =
+        await Pack.find({});
 
+      res.json({
+        success: true,
 
+        count:
+          packs.length,
 
+        packs:
+          packs.map((pack) => ({
+            id: pack._id,
+            name: pack.name,
+            status: pack.status,
+            price: pack.price,
+          })),
+      });
 
-app.get("/api/test-packs", async (req, res) => {
-  try {
-    const Pack = require("./models/Pack");
+    } catch (error) {
+      console.error(error);
 
-    const packs = await Pack.find({});
-
-    res.json({
-      success: true,
-      count: packs.length,
-      packs: packs.map((pack) => ({
-        id: pack._id,
-        name: pack.name,
-        status: pack.status,
-        price: pack.price,
-      })),
-    });
-
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+      res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
   }
-});
+);
 
 // =====================================================
 // SERVER
@@ -230,8 +334,19 @@ app.get("/api/test-packs", async (req, res) => {
 const PORT =
   process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(
-    `Server running on port ${PORT}`
-  );
-});
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      `Server running on port ${PORT}`
+    );
+
+    console.log(
+      "Daily price scheduler is active."
+    );
+
+    console.log(
+      "Next automatic price update: 2:00 AM IST."
+    );
+  }
+);

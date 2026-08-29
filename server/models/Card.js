@@ -48,6 +48,30 @@ const cardSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // =========================
+// CARD PRICE
+// =========================
+
+price: {
+  type: Number,
+  default: null,
+  index: true,
+},
+
+priceCurrency: {
+  type: String,
+  default: "USD",
+},
+
+priceSource: {
+  type: String,
+  default: "",
+},
+
+priceLastUpdated: {
+  type: Date,
+  default: null,
+},
 
     imageSmall: {
       type: String,
@@ -144,6 +168,7 @@ const cardSchema = new mongoose.Schema(
         default: {},
       },
     },
+  
 
     legalities: {
       type: mongoose.Schema.Types.Mixed,
@@ -166,5 +191,4 @@ const cardSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
 module.exports = mongoose.model("Card", cardSchema);

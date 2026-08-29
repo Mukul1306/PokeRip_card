@@ -100,6 +100,20 @@ const [categoryDescription, setCategoryDescription] =
 
 const [savingCategory, setSavingCategory] =
   useState(false);
+  const [showPackCards, setShowPackCards] =
+  useState(false);
+
+const [selectedPack, setSelectedPack] =
+  useState(null);
+
+const [selectedCard, setSelectedCard] =
+  useState(null);
+
+const [packCards, setPackCards] =
+  useState([]);
+
+const [loadingPackCards, setLoadingPackCards] =
+  useState(false);
   // =====================================================
   // FETCH PACKS
   // =====================================================
@@ -273,9 +287,14 @@ const [savingCategory, setSavingCategory] =
           );
         }
 
-        setAvailableCards(
-          data.data?.cards || []
-        );
+        const cards =
+          data.data?.cards ||
+          data.cards ||
+          [];
+
+        setAvailableCards(cards);
+
+        return cards;
 
       } catch (error) {
 
@@ -295,14 +314,110 @@ const [savingCategory, setSavingCategory] =
 
 
   // =====================================================
+  // OPEN PACK CARDS
+  // =====================================================
+
+  const openPackCards = async (pack) => {
+    try {
+      setSelectedPack(pack);
+      setSelectedCard(null);
+      setPackCards([]);
+      setShowPackCards(true);
+      setLoadingPackCards(true);
+
+      const token = localStorage.getItem("adminToken");
+
+      const response = await fetch(
+        `${API_URL}/api/admin/odds/${pack._id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Unable to load pack cards"
+        );
+      }
+
+      const oddsCards =
+        data.data?.cards ||
+        data.data?.odds ||
+        data.cards ||
+        [];
+
+      let cardLibrary = availableCards;
+      if (cardLibrary.length === 0) {
+        cardLibrary = (await fetchCards()) || [];
+      }
+
+      const resolvedCards =
+        (oddsCards.length ? oddsCards : (pack.cards || []))
+          .map((packCard) => {
+            const embeddedCard =
+              packCard?.card && typeof packCard.card === "object"
+                ? packCard.card
+                : packCard && packCard._id
+                  ? packCard
+                  : null;
+
+            const cardId =
+              embeddedCard?._id ||
+              packCard?.card?._id ||
+              packCard?.card ||
+              packCard?._id;
+
+            const savedCard = cardLibrary.find(
+              (item) => String(item._id) === String(cardId)
+            );
+
+            const embeddedPrice =
+              Number(embeddedCard?.price) > 0
+                ? embeddedCard.price
+                : Number(embeddedCard?.marketPrice) > 0
+                  ? embeddedCard.marketPrice
+                  : null;
+
+            const savedPrice =
+              Number(savedCard?.price) > 0
+                ? savedCard.price
+                : Number(savedCard?.marketPrice) > 0
+                  ? savedCard.marketPrice
+                  : null;
+
+            return {
+              ...packCard,
+              card: {
+                ...(savedCard || {}),
+                ...(embeddedCard || {}),
+                price: embeddedPrice ?? savedPrice ?? 0,
+              },
+            };
+          });
+
+      setPackCards(resolvedCards);
+    } catch (error) {
+      console.error("Pack cards error:", error);
+      alert(error.message);
+      setPackCards(pack.cards || []);
+    } finally {
+      setLoadingPackCards(false);
+    }
+  };
+
+  // =====================================================
   // INITIAL
   // =====================================================
 
   useEffect(() => {
 
     fetchPacks(1);
-
     fetchCategories();
+    fetchCards();
 
   }, []);
 
@@ -1115,8 +1230,11 @@ const createCategory = async (e) => {
 
                       <td className="px-6 py-5">
 
-                        <div className="flex items-center gap-3">
-
+<button
+  type="button"
+  onClick={() => openPackCards(pack)}
+  className="flex items-center gap-3 text-left"
+>
                           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-black/5">
 
                             {pack.image ? (
@@ -1162,7 +1280,7 @@ const createCategory = async (e) => {
 
                           </div>
 
-                        </div>
+                        </button>
 
                       </td>
 
@@ -1347,6 +1465,215 @@ const createCategory = async (e) => {
 
       </section>
 
+      {showPackCards && selectedPack && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+
+          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-[#f4f4f4] p-6 shadow-2xl">
+
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black tracking-[0.2em] text-[#238bdc]">
+                  PACK CARDS
+                </p>
+                <h2 className="mt-1 text-2xl font-black">
+                  {selectedPack.name}
+                </h2>
+                <p className="mt-1 text-xs text-[#777]">
+                  {packCards.length} card{packCards.length === 1 ? "" : "s"} in this pack
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPackCards(false);
+                  setSelectedPack(null);
+                  setSelectedCard(null);
+                  setPackCards([]);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/5 hover:bg-black/10"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {loadingPackCards ? (
+              <div className="flex min-h-[300px] items-center justify-center rounded-2xl border border-black/10 bg-white">
+                <Loader2 size={30} className="animate-spin text-[#238bdc]" />
+              </div>
+            ) : packCards.length === 0 ? (
+              <div className="flex min-h-[300px] flex-col items-center justify-center rounded-2xl border border-dashed border-black/15 bg-white text-center">
+                <Package size={32} className="text-[#aaa]" />
+                <p className="mt-3 text-sm font-black">
+                  No cards found in this pack.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                {packCards.map((packCard, index) => {
+                  const embeddedCard =
+                    packCard?.card && typeof packCard.card === "object"
+                      ? packCard.card
+                      : packCard && !packCard.card && packCard._id
+                        ? packCard
+                        : null;
+
+                  const cardId =
+                    embeddedCard?._id ||
+                    packCard?.card?._id ||
+                    packCard?.card ||
+                    packCard?._id;
+
+                  const card =
+                    embeddedCard ||
+                    availableCards.find(
+                      (item) => String(item._id) === String(cardId)
+                    );
+
+                  if (!card) {
+                    return (
+                      <div
+                        key={index}
+                        className="rounded-2xl border border-black/10 bg-white p-4"
+                      >
+                        <div className="flex h-64 items-center justify-center rounded-xl bg-gray-100 text-center text-xs text-gray-400">
+                          Card details not found
+                        </div>
+                        <p className="mt-3 text-xs font-bold text-gray-500">
+                          Card ID: {String(cardId || "—")}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  const image =
+                    card.imageLarge ||
+                    card.imageSmall ||
+                    card.image ||
+                    card.images?.large ||
+                    card.images?.small ||
+                    "";
+
+                  const imageUrl = image
+                    ? image.startsWith("http")
+                      ? image
+                      : `${API_URL}${image.startsWith("/") ? "" : "/"}${image}`
+                    : "";
+
+                  return (
+                    <button
+                      key={card._id || index}
+                      type="button"
+                      onClick={() => setSelectedCard(card)}
+                      className="rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:-translate-y-1 hover:shadow-lg"
+                    >
+                      <div className="flex h-64 items-center justify-center overflow-hidden rounded-xl bg-[#f7f7f7]">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={card.name || "Pokemon Card"}
+                            className="h-full max-w-full rounded-xl object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                            No Image
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="mt-3 truncate text-sm font-black">
+                        {card.name || "Unknown Card"}
+                      </p>
+
+                      <p className="mt-1 text-[10px] text-[#888]">
+                        {card.set?.name || "Unknown Set"}
+                      </p>
+
+                      <p className="mt-1 text-[10px] text-[#888]">
+                        #{card.number || "—"}
+                      </p>
+
+                      <p className="mt-2 text-xs font-black">
+                        Price: ${Number(
+                           card.price ??
+                           card.marketPrice ??
+                           card.apiPrice ??
+                           card.currentPrice ??
+                           card.market_data?.prices?.market ??
+                           0
+                         ).toFixed(2)}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedCard && (
+              <div className="mt-6 rounded-2xl border border-black/10 bg-white p-5">
+                <div className="flex flex-col gap-5 sm:flex-row">
+                  <div className="flex h-80 w-full items-center justify-center rounded-xl bg-[#f7f7f7] sm:w-56">
+                    {(() => {
+                      const image =
+                        selectedCard.imageLarge ||
+                        selectedCard.imageSmall ||
+                        selectedCard.image ||
+                        selectedCard.images?.large ||
+                        selectedCard.images?.small ||
+                        "";
+                      const imageUrl = image
+                        ? image.startsWith("http")
+                          ? image
+                          : `${API_URL}${image.startsWith("/") ? "" : "/"}${image}`
+                        : "";
+
+                      return imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={selectedCard.name || "Pokemon Card"}
+                          className="h-full max-w-full rounded-xl object-contain"
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-400">No Image</span>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="flex-1">
+                    <p className="text-[9px] font-black tracking-widest text-[#238bdc]">
+                      SELECTED CARD
+                    </p>
+
+                    <h3 className="mt-2 text-2xl font-black">
+                      {selectedCard.name || "Unknown Card"}
+                    </h3>
+
+                    <div className="mt-4 space-y-2 text-sm text-[#666]">
+                      <p>Set: {selectedCard.set?.name || "—"}</p>
+                      <p>Number: {selectedCard.number || "—"}</p>
+                      <p>Rarity: {selectedCard.rarity || "—"}</p>
+                      <p>
+                        Price: ${Number(
+                          selectedCard.price ??
+                          selectedCard.marketPrice ??
+                          selectedCard.apiPrice ??
+                          selectedCard.currentPrice ??
+                          selectedCard.market_data?.prices?.market ??
+                          0
+                        ).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* =================================================
           CREATE / EDIT MODAL

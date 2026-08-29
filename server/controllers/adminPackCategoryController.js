@@ -44,6 +44,8 @@ const createCategory = async (req, res) => {
       name,
       description,
       image,
+      minPrice,
+      maxPrice,
       sortOrder,
     } = req.body;
 
@@ -51,6 +53,39 @@ const createCategory = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Category name is required",
+      });
+    }
+
+    const numericMinPrice =
+      Number(minPrice);
+
+    const numericMaxPrice =
+      maxPrice === "" ||
+      maxPrice === null ||
+      maxPrice === undefined
+        ? null
+        : Number(maxPrice);
+
+    if (
+      !Number.isFinite(numericMinPrice) ||
+      numericMinPrice < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid minimum price",
+      });
+    }
+
+    if (
+      numericMaxPrice !== null &&
+      (
+        !Number.isFinite(numericMaxPrice) ||
+        numericMaxPrice < numericMinPrice
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid maximum price",
       });
     }
 
@@ -71,8 +106,7 @@ const createCategory = async (req, res) => {
     if (existing) {
       return res.status(409).json({
         success: false,
-        message:
-          "Category already exists",
+        message: "Category already exists",
       });
     }
 
@@ -83,6 +117,10 @@ const createCategory = async (req, res) => {
         description:
           description?.trim() || "",
         image: image || "",
+
+        minPrice: numericMinPrice,
+        maxPrice: numericMaxPrice,
+
         sortOrder:
           Number(sortOrder) || 0,
       });
@@ -139,6 +177,8 @@ const updateCategory = async (req, res) => {
       name,
       description,
       image,
+      minPrice,
+      maxPrice,
       status,
       sortOrder,
     } = req.body;
@@ -161,6 +201,42 @@ const updateCategory = async (req, res) => {
     if (image !== undefined) {
       category.image = image;
     }
+
+    if (minPrice !== undefined) {
+  const value = Number(minPrice);
+
+  if (!Number.isFinite(value) || value < 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid minimum price",
+    });
+  }
+
+  category.minPrice = value;
+}
+
+if (maxPrice !== undefined) {
+  const value =
+    maxPrice === "" ||
+    maxPrice === null
+      ? null
+      : Number(maxPrice);
+
+  if (
+    value !== null &&
+    (
+      !Number.isFinite(value) ||
+      value < category.minPrice
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid maximum price",
+    });
+  }
+
+  category.maxPrice = value;
+}
 
     if (status !== undefined) {
       if (

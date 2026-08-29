@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const Pack = require("../models/Pack");
 const Card = require("../models/Card");
 const PackCategory = require("../models/PackCategory");
-
+const cloudinary = require("../config/cloudinary");
 
 // =====================================================
 // HELPER
@@ -17,6 +17,29 @@ const makeSlug = (name) => {
     .replace(/^-+|-+$/g, "");
 };
 
+// =====================================================
+// CLOUDINARY UPLOAD
+// =====================================================
+
+const uploadToCloudinary = (fileBuffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "pokerip/packs",
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+
+    stream.end(fileBuffer);
+  });
+};
 
 // =====================================================
 // GET ALL PACKS
@@ -48,12 +71,20 @@ const getAllPacks = async (req, res) => {
 
     const filter = {};
 
+    // =================================================
+    // SEARCH
+    // =================================================
+
     if (search) {
       filter.name = {
         $regex: search,
         $options: "i",
       };
     }
+
+    // =================================================
+    // STATUS
+    // =================================================
 
     if (
       status &&
@@ -67,6 +98,10 @@ const getAllPacks = async (req, res) => {
       filter.status = status;
     }
 
+    // =================================================
+    // CATEGORY
+    // =================================================
+
     if (
       category &&
       mongoose.Types.ObjectId.isValid(category)
@@ -74,16 +109,20 @@ const getAllPacks = async (req, res) => {
       filter.category = category;
     }
 
+    // =================================================
+    // GET PACKS
+    // =================================================
+
     const [packs, totalPacks] =
       await Promise.all([
         Pack.find(filter)
           .populate(
             "category",
-            "name slug image"
+            "name slug image minPrice maxPrice status"
           )
           .populate(
             "cards.card",
-            "name tcgId imageSmall imageLarge set rarity number"
+            "name tcgId imageSmall imageLarge set rarity number price"
           )
           .sort({
             createdAt: -1,
@@ -123,7 +162,6 @@ const getAllPacks = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // GET PACK BY ID
 // GET /api/admin/packs/:id
@@ -145,11 +183,11 @@ const getPackById = async (req, res) => {
     const pack = await Pack.findById(id)
       .populate(
         "category",
-        "name slug image"
+        "name slug image minPrice maxPrice status"
       )
       .populate(
         "cards.card",
-        "name tcgId imageSmall imageLarge set rarity number"
+        "name tcgId imageSmall imageLarge set rarity number price"
       );
 
     if (!pack) {
@@ -176,28 +214,65 @@ const getPackById = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // CREATE PACK
 // POST /api/admin/packs
+//
+// IMPORTANT:
+//
+// category    = category selected by admin
+// packPrice   = selling price of the pack
+//
+// Card price range comes AUTOMATICALLY
+// from PackCategory.minPrice / maxPrice
 // =====================================================
 
 const createPack = async (req, res) => {
   try {
+    // =================================================
+    // IMAGE
+    // =================================================
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Pack image is required",
+      });
+    }
+
+    // =================================================
+    // UPLOAD IMAGE
+    // =================================================
+
+    let uploadedImageUrl = "";
+
+    if (req.file) {
+      const uploadResult =
+        await uploadToCloudinary(
+          req.file.buffer
+        );
+
+      uploadedImageUrl =
+        uploadResult.secure_url;
+    }
+
+    // =================================================
+    // BODY
+    // =================================================
+
     const {
       name,
       description,
-      image,
       category,
-      price,
+      packPrice,
       totalStock,
-      cards,
+      cardsPerPack,
       status,
     } = req.body;
 
-    // -------------------------
-    // Validation
-    // -------------------------
+    // =================================================
+    // NAME
+    // =================================================
 
     if (!name?.trim()) {
       return res.status(400).json({
@@ -205,6 +280,10 @@ const createPack = async (req, res) => {
         message: "Pack name is required",
       });
     }
+
+    // =================================================
+    // CATEGORY
+    // =================================================
 
     if (!category) {
       return res.status(400).json({
@@ -226,13 +305,24 @@ const createPack = async (req, res) => {
       });
     }
 
-    const categoryExists =
+    // =================================================
+    // FETCH CATEGORY
+    //
+    // THIS IS IMPORTANT
+    //
+    // We DO NOT trust minPrice/maxPrice
+    // sent from frontend.
+    //
+    // We get them directly from database.
+    // =================================================
+
+    const categoryData =
       await PackCategory.findOne({
         _id: category,
         status: "ACTIVE",
       });
 
-    if (!categoryExists) {
+    if (!categoryData) {
       return res.status(400).json({
         success: false,
         message:
@@ -240,23 +330,77 @@ const createPack = async (req, res) => {
       });
     }
 
-    const numericPrice =
-      Number(price);
+    // =================================================
+    // AUTOMATIC CATEGORY PRICE RANGE
+    // =================================================
 
-    const numericStock =
-      Number(totalStock);
+    const categoryMinPrice =
+      Number(categoryData.minPrice);
+
+    const categoryMaxPrice =
+      categoryData.maxPrice === null ||
+      categoryData.maxPrice === undefined
+        ? null
+        : Number(categoryData.maxPrice);
 
     if (
       !Number.isFinite(
-        numericPrice
+        categoryMinPrice
       ) ||
-      numericPrice < 0
+      categoryMinPrice < 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid pack price",
+        message:
+          "Invalid category minimum price",
       });
     }
+
+    if (
+      categoryMaxPrice !== null &&
+      (
+        !Number.isFinite(
+          categoryMaxPrice
+        ) ||
+        categoryMaxPrice <
+          categoryMinPrice
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid category maximum price",
+      });
+    }
+
+    // =================================================
+    // PACK PRICE
+    //
+    // This is the price admin sets for the pack.
+    // =================================================
+
+    const numericPackPrice =
+      Number(packPrice);
+
+    if (
+      !Number.isFinite(
+        numericPackPrice
+      ) ||
+      numericPackPrice < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid pack price",
+      });
+    }
+
+    // =================================================
+    // STOCK
+    // =================================================
+
+    const numericStock =
+      Number(totalStock);
 
     if (
       !Number.isInteger(
@@ -271,116 +415,188 @@ const createPack = async (req, res) => {
       });
     }
 
-    // -------------------------
-    // Validate cards
-    // -------------------------
+    // =================================================
+    // CARDS PER PACK
+    // =================================================
 
-    const submittedCards =
-      Array.isArray(cards)
-        ? cards
-        : [];
-
-    const cardIds =
-      submittedCards.map(
-        (item) =>
-          item.card
-      );
-
-    const uniqueCardIds =
-      [...new Set(
-        cardIds.map(String)
-      )];
+    const numericCardsPerPack =
+      Number(cardsPerPack);
 
     if (
-      uniqueCardIds.some(
-        (id) =>
-          !mongoose.Types.ObjectId.isValid(
-            id
-          )
-      )
+      !Number.isInteger(
+        numericCardsPerPack
+      ) ||
+      numericCardsPerPack < 1
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid card ID in pack",
+          "Cards per pack must be a positive whole number",
       });
     }
 
-    if (uniqueCardIds.length > 0) {
-      const existingCards =
-        await Card.countDocuments({
-          _id: {
-            $in: uniqueCardIds,
-          },
-          status: "ACTIVE",
-        });
+    // =================================================
+    // FIND CARDS USING CATEGORY PRICE RANGE
+    // =================================================
 
-      if (
-        existingCards !==
-        uniqueCardIds.length
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "One or more cards do not exist",
-        });
-      }
+    const cardPriceFilter = {
+      status: "ACTIVE",
+
+      price: {
+        $gte: categoryMinPrice,
+      },
+    };
+
+    // If category has maximum price,
+    // add $lte.
+    if (categoryMaxPrice !== null) {
+      cardPriceFilter.price.$lte =
+        categoryMaxPrice;
     }
 
-    // -------------------------
-    // Build cards
-    // -------------------------
+    // =================================================
+    // GET AVAILABLE CARDS
+    // =================================================
+
+    const availableCards =
+      await Card.find(
+        cardPriceFilter
+      );
+
+    console.log(
+      "===================================="
+    );
+
+    console.log(
+      "PACK CATEGORY:",
+      categoryData.name
+    );
+
+    console.log(
+      "CATEGORY MIN PRICE:",
+      categoryMinPrice
+    );
+
+    console.log(
+      "CATEGORY MAX PRICE:",
+      categoryMaxPrice
+    );
+
+    console.log(
+      "AVAILABLE CARDS:",
+      availableCards.length
+    );
+
+    console.log(
+      "===================================="
+    );
+
+    // =================================================
+    // NO CARDS
+    // =================================================
+
+    if (
+      availableCards.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No active cards are available in this category price range",
+      });
+    }
+
+    // =================================================
+    // NOT ENOUGH CARDS
+    // =================================================
+
+    if (
+      availableCards.length <
+      numericCardsPerPack
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          `Only ${availableCards.length} cards are available in this category price range. ` +
+          `You need ${numericCardsPerPack} cards.`,
+      });
+    }
+
+    // =================================================
+    // RANDOM CARD SELECTION
+    // =================================================
+
+    const shuffledCards =
+      [...availableCards].sort(
+        () => Math.random() - 0.5
+      );
+
+    const selectedCards =
+      shuffledCards.slice(
+        0,
+        numericCardsPerPack
+      );
+
+    // =================================================
+    // CREATE PACK CARD RECORDS
+    // =================================================
 
     const packCards =
-      submittedCards.map(
-        (item) => ({
-          card: item.card,
-
-          pullWeight:
-            Number(
-              item.pullWeight
-            ) || 0,
-
-          quantity:
-            Number(
-              item.quantity
-            ) || 0,
+      selectedCards.map(
+        (card) => ({
+          card: card._id,
+          pullWeight: 1,
+          quantity: 1,
         })
       );
 
-    // -------------------------
-    // Slug
-    // -------------------------
+    console.log(
+      "Selected random cards:",
+      selectedCards.map(
+        (card) => ({
+          id: card._id,
+          name: card.name,
+          price: card.price,
+        })
+      )
+    );
+
+    // =================================================
+    // SLUG
+    // =================================================
 
     const baseSlug =
       makeSlug(name);
 
     let slug = baseSlug;
-
     let counter = 1;
 
     while (
-      await Pack.exists({ slug })
+      await Pack.exists({
+        slug,
+      })
     ) {
-      slug = `${baseSlug}-${counter}`;
+      slug =
+        `${baseSlug}-${counter}`;
+
       counter++;
     }
 
-    // -------------------------
-    // Status
-    // -------------------------
+    // =================================================
+    // STATUS
+    // =================================================
 
     const packStatus = [
       "DRAFT",
       "PUBLISHED",
       "PAUSED",
+      "ARCHIVED",
     ].includes(status)
       ? status
       : "DRAFT";
 
-    // -------------------------
-    // Create
-    // -------------------------
+    // =================================================
+    // CREATE PACK
+    // =================================================
 
     const pack =
       await Pack.create({
@@ -392,22 +608,52 @@ const createPack = async (req, res) => {
           description?.trim() || "",
 
         image:
-          image || "",
+          uploadedImageUrl,
 
+        // CATEGORY
         category,
 
-        price: numericPrice,
+        // =================================================
+        // PACK SELLING PRICE
+        // =================================================
+
+        packPrice:
+          numericPackPrice,
+
+        // =================================================
+        // CARD PRICE RANGE
+        //
+        // Automatically taken from category.
+        // =================================================
+
+        priceRange: {
+          min:
+            categoryMinPrice,
+
+          max:
+            categoryMaxPrice,
+        },
+
+        cardsPerPack:
+          numericCardsPerPack,
 
         totalStock:
           numericStock,
 
-        cards: packCards,
+        // RANDOMLY SELECTED CARDS
+        cards:
+          packCards,
 
-        status: packStatus,
+        status:
+          packStatus,
 
         createdBy:
           req.user?._id || null,
       });
+
+    // =================================================
+    // POPULATE RESPONSE
+    // =================================================
 
     const populatedPack =
       await Pack.findById(
@@ -415,11 +661,11 @@ const createPack = async (req, res) => {
       )
         .populate(
           "category",
-          "name slug image"
+          "name slug image minPrice maxPrice status"
         )
         .populate(
           "cards.card",
-          "name tcgId imageSmall imageLarge set rarity number"
+          "name tcgId imageSmall imageLarge set rarity number price"
         );
 
     return res.status(201).json({
@@ -428,7 +674,8 @@ const createPack = async (req, res) => {
       message:
         "Pack created successfully",
 
-      pack: populatedPack,
+      pack:
+        populatedPack,
     });
   } catch (error) {
     console.error(
@@ -443,7 +690,6 @@ const createPack = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // UPDATE PACK
 // PATCH /api/admin/packs/:id
@@ -451,16 +697,27 @@ const createPack = async (req, res) => {
 
 const updatePack = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
+
+    // =================================================
+    // ID VALIDATION
+    // =================================================
 
     if (
-      !mongoose.Types.ObjectId.isValid(id)
+      !mongoose.Types.ObjectId.isValid(
+        id
+      )
     ) {
       return res.status(400).json({
         success: false,
         message: "Invalid pack ID",
       });
     }
+
+    // =================================================
+    // FIND PACK
+    // =================================================
 
     const pack =
       await Pack.findById(id);
@@ -472,16 +729,23 @@ const updatePack = async (req, res) => {
       });
     }
 
+    // =================================================
+    // BODY
+    // =================================================
+
     const {
       name,
       description,
-      image,
       category,
-      price,
+      packPrice,
       totalStock,
-      cards,
+      cardsPerPack,
       status,
     } = req.body;
+
+    // =================================================
+    // NAME
+    // =================================================
 
     if (name !== undefined) {
       if (!name.trim()) {
@@ -492,12 +756,17 @@ const updatePack = async (req, res) => {
         });
       }
 
-      pack.name = name.trim();
+      pack.name =
+        name.trim();
     }
 
-    if (
-      category !== undefined
-    ) {
+    // =================================================
+    // CATEGORY
+    // =================================================
+
+    let categoryData = null;
+
+    if (category !== undefined) {
       if (
         !mongoose.Types.ObjectId.isValid(
           category
@@ -510,13 +779,13 @@ const updatePack = async (req, res) => {
         });
       }
 
-      const categoryExists =
+      categoryData =
         await PackCategory.findOne({
           _id: category,
           status: "ACTIVE",
         });
 
-      if (!categoryExists) {
+      if (!categoryData) {
         return res.status(400).json({
           success: false,
           message:
@@ -524,31 +793,106 @@ const updatePack = async (req, res) => {
         });
       }
 
-      pack.category = category;
+      pack.category =
+        category;
+    } else {
+      // Use existing category
+      categoryData =
+        await PackCategory.findById(
+          pack.category
+        );
     }
 
-    if (
-      price !== undefined
-    ) {
-      const numericPrice =
-        Number(price);
+    // =================================================
+    // CATEGORY PRICE RANGE
+    //
+    // Always get range from category.
+    // =================================================
+
+    if (categoryData) {
+      const categoryMinPrice =
+        Number(
+          categoryData.minPrice
+        );
+
+      const categoryMaxPrice =
+        categoryData.maxPrice === null ||
+        categoryData.maxPrice === undefined
+          ? null
+          : Number(
+              categoryData.maxPrice
+            );
 
       if (
         !Number.isFinite(
-          numericPrice
+          categoryMinPrice
         ) ||
-        numericPrice < 0
+        categoryMinPrice < 0
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Invalid price",
+            "Invalid category minimum price",
         });
       }
 
-      pack.price =
-        numericPrice;
+      if (
+        categoryMaxPrice !== null &&
+        (
+          !Number.isFinite(
+            categoryMaxPrice
+          ) ||
+          categoryMaxPrice <
+            categoryMinPrice
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid category maximum price",
+        });
+      }
+
+      // Automatically update pack range
+      pack.priceRange = {
+        min:
+          categoryMinPrice,
+
+        max:
+          categoryMaxPrice,
+      };
     }
+
+    // =================================================
+    // PACK PRICE
+    // =================================================
+
+    if (
+      packPrice !== undefined
+    ) {
+      const numericPackPrice =
+        Number(packPrice);
+
+      if (
+        !Number.isFinite(
+          numericPackPrice
+        ) ||
+        numericPackPrice < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid pack price",
+        });
+      }
+
+      pack.packPrice =
+        numericPackPrice;
+    }
+
+    // =================================================
+    // STOCK
+    // =================================================
 
     if (
       totalStock !== undefined
@@ -573,6 +917,37 @@ const updatePack = async (req, res) => {
         numericStock;
     }
 
+    // =================================================
+    // CARDS PER PACK
+    // =================================================
+
+    if (
+      cardsPerPack !== undefined
+    ) {
+      const numericCardsPerPack =
+        Number(cardsPerPack);
+
+      if (
+        !Number.isInteger(
+          numericCardsPerPack
+        ) ||
+        numericCardsPerPack < 1
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Cards per pack must be a positive whole number",
+        });
+      }
+
+      pack.cardsPerPack =
+        numericCardsPerPack;
+    }
+
+    // =================================================
+    // DESCRIPTION
+    // =================================================
+
     if (
       description !== undefined
     ) {
@@ -580,60 +955,23 @@ const updatePack = async (req, res) => {
         description.trim();
     }
 
-    if (
-      image !== undefined
-    ) {
-      pack.image = image;
-    }
+    // =================================================
+    // PACK IMAGE
+    // =================================================
 
-    if (
-      Array.isArray(cards)
-    ) {
-      const cardIds =
-        cards.map(
-          (item) =>
-            item.card
+    if (req.file) {
+      const uploadResult =
+        await uploadToCloudinary(
+          req.file.buffer
         );
 
-      const uniqueCardIds =
-        [...new Set(
-          cardIds.map(String)
-        )];
-
-      const existingCards =
-        await Card.countDocuments({
-          _id: {
-            $in: uniqueCardIds,
-          },
-          status: "ACTIVE",
-        });
-
-      if (
-        existingCards !==
-        uniqueCardIds.length
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "One or more cards are invalid",
-        });
-      }
-
-      pack.cards =
-        cards.map(
-          (item) => ({
-            card: item.card,
-            pullWeight:
-              Number(
-                item.pullWeight
-              ) || 0,
-            quantity:
-              Number(
-                item.quantity
-              ) || 0,
-          })
-        );
+      pack.image =
+        uploadResult.secure_url;
     }
+
+    // =================================================
+    // STATUS
+    // =================================================
 
     if (
       status !== undefined
@@ -653,20 +991,29 @@ const updatePack = async (req, res) => {
         });
       }
 
-      pack.status = status;
+      pack.status =
+        status;
     }
 
-    if (name !== undefined) {
+    // =================================================
+    // SLUG
+    // =================================================
+
+    if (
+      name !== undefined
+    ) {
       const baseSlug =
         makeSlug(name);
 
-      let slug = baseSlug;
+      let slug =
+        baseSlug;
 
       let counter = 1;
 
       while (
         await Pack.exists({
           slug,
+
           _id: {
             $ne: pack._id,
           },
@@ -674,13 +1021,23 @@ const updatePack = async (req, res) => {
       ) {
         slug =
           `${baseSlug}-${counter}`;
+
         counter++;
       }
 
-      pack.slug = slug;
+      pack.slug =
+        slug;
     }
 
+    // =================================================
+    // SAVE
+    // =================================================
+
     await pack.save();
+
+    // =================================================
+    // POPULATED RESPONSE
+    // =================================================
 
     const updatedPack =
       await Pack.findById(
@@ -688,18 +1045,21 @@ const updatePack = async (req, res) => {
       )
         .populate(
           "category",
-          "name slug image"
+          "name slug image minPrice maxPrice status"
         )
         .populate(
           "cards.card",
-          "name tcgId imageSmall imageLarge set rarity number"
+          "name tcgId imageSmall imageLarge set rarity number price"
         );
 
     return res.status(200).json({
       success: true,
+
       message:
         "Pack updated successfully",
-      pack: updatedPack,
+
+      pack:
+        updatedPack,
     });
   } catch (error) {
     console.error(
@@ -714,10 +1074,19 @@ const updatePack = async (req, res) => {
   }
 };
 
-
 // =====================================================
-// UPDATE STATUS
+// UPDATE PACK STATUS
 // PATCH /api/admin/packs/:id/status
+//
+// ARCHIVE:
+// {
+//   "status": "ARCHIVED"
+// }
+//
+// UNARCHIVE:
+// {
+//   "status": "PUBLISHED"
+// }
 // =====================================================
 
 const updatePackStatus = async (
@@ -725,17 +1094,31 @@ const updatePackStatus = async (
   res
 ) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
+    const { id } =
+      req.params;
+
+    const { status } =
+      req.body;
+
+    // =================================================
+    // ID VALIDATION
+    // =================================================
 
     if (
-      !mongoose.Types.ObjectId.isValid(id)
+      !mongoose.Types.ObjectId.isValid(
+        id
+      )
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid pack ID",
+        message:
+          "Invalid pack ID",
       });
     }
+
+    // =================================================
+    // STATUS VALIDATION
+    // =================================================
 
     if (
       ![
@@ -752,27 +1135,70 @@ const updatePackStatus = async (
       });
     }
 
+    // =================================================
+    // UPDATE
+    // =================================================
+
     const pack =
       await Pack.findByIdAndUpdate(
         id,
-        { status },
+
+        {
+          status,
+        },
+
         {
           new: true,
           runValidators: true,
         }
-      );
+      )
+        .populate(
+          "category",
+          "name slug image minPrice maxPrice status"
+        )
+        .populate(
+          "cards.card",
+          "name tcgId imageSmall imageLarge set rarity number price"
+        );
+
+    // =================================================
+    // NOT FOUND
+    // =================================================
 
     if (!pack) {
       return res.status(404).json({
         success: false,
-        message: "Pack not found",
+        message:
+          "Pack not found",
       });
+    }
+
+    // =================================================
+    // MESSAGE
+    // =================================================
+
+    let message =
+      "Pack status updated";
+
+    if (
+      status === "ARCHIVED"
+    ) {
+      message =
+        "Pack archived successfully";
+    }
+
+    if (
+      status === "PUBLISHED"
+    ) {
+      message =
+        "Pack unarchived successfully";
     }
 
     return res.status(200).json({
       success: true,
-      message:
-        "Pack status updated",
+
+      message,
+
       pack,
     });
   } catch (error) {
@@ -788,9 +1214,8 @@ const updatePackStatus = async (
   }
 };
 
-
 // =====================================================
-// DELETE / ARCHIVE PACK
+// PERMANENTLY DELETE PACK
 // DELETE /api/admin/packs/:id
 // =====================================================
 
@@ -799,16 +1224,28 @@ const deletePack = async (
   res
 ) => {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
+
+    // =================================================
+    // ID VALIDATION
+    // =================================================
 
     if (
-      !mongoose.Types.ObjectId.isValid(id)
+      !mongoose.Types.ObjectId.isValid(
+        id
+      )
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid pack ID",
+        message:
+          "Invalid pack ID",
       });
     }
+
+    // =================================================
+    // FIND PACK
+    // =================================================
 
     const pack =
       await Pack.findById(id);
@@ -816,19 +1253,27 @@ const deletePack = async (
     if (!pack) {
       return res.status(404).json({
         success: false,
-        message: "Pack not found",
+        message:
+          "Pack not found",
       });
     }
 
-    // Archive instead of hard delete.
-    pack.status = "ARCHIVED";
+    // =================================================
+    // PERMANENT DELETE
+    // =================================================
 
-    await pack.save();
+    await Pack.findByIdAndDelete(
+      id
+    );
 
     return res.status(200).json({
       success: true,
+
       message:
-        "Pack archived successfully",
+        "Pack deleted permanently",
+
+      deletedPackId:
+        id,
     });
   } catch (error) {
     console.error(
@@ -843,6 +1288,9 @@ const deletePack = async (
   }
 };
 
+// =====================================================
+// EXPORTS
+// =====================================================
 
 module.exports = {
   getAllPacks,

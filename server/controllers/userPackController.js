@@ -1,17 +1,65 @@
 const mongoose = require("mongoose");
+
 const Pack = require("../models/Pack");
 
+
 // =====================================================
-// GET USER PACK DETAILS
-// GET /api/user/packs/:id
+// GET ALL PUBLISHED PACKS
+// GET /api/user/packs
 // =====================================================
 
-const getUserPackById = async (req, res) => {
+const getPublishedPacks = async (
+  req,
+  res
+) => {
   try {
-    const { id } = req.params;
+    const packs = await Pack.find({
+      status: "PUBLISHED",
+    })
+      .populate("category")
+      .sort({
+        createdAt: -1,
+      })
+      .lean();
 
+    return res.status(200).json({
+      success: true,
+
+      data: {
+        packs,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Get published packs error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load packs",
+    });
+  }
+};
+
+
+// =====================================================
+// GET SINGLE PACK
+// GET /api/user/packs/:packId
+// =====================================================
+
+const getPackById = async (
+  req,
+  res
+) => {
+  try {
+    const { packId } = req.params;
+
+    // Validate ObjectId
     if (
-      !mongoose.Types.ObjectId.isValid(id)
+      !mongoose.Types.ObjectId.isValid(
+        packId
+      )
     ) {
       return res.status(400).json({
         success: false,
@@ -19,15 +67,13 @@ const getUserPackById = async (req, res) => {
       });
     }
 
-    const pack = await Pack.findOne({
-      _id: id,
-      status: "PUBLISHED",
-    })
-      .populate(
-        "category",
-        "name slug image"
-      )
-      .lean();
+    const pack =
+      await Pack.findOne({
+        _id: packId,
+        status: "PUBLISHED",
+      })
+        .populate("category")
+        .lean();
 
     if (!pack) {
       return res.status(404).json({
@@ -41,26 +87,27 @@ const getUserPackById = async (req, res) => {
 
       data: {
         pack,
-
-        // Wallet will be connected later
-        walletBalance: 0,
       },
     });
-
   } catch (error) {
-
     console.error(
-      "Get user pack error:",
+      "Get pack by ID error:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Unable to load pack",
     });
   }
 };
 
+
+// =====================================================
+// EXPORTS
+// =====================================================
+
 module.exports = {
-  getUserPackById,
+  getPublishedPacks,
+  getPackById,
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import {
@@ -9,6 +9,8 @@ import {
   Save,
   Loader2,
   Trash2,
+  Archive,
+  RotateCcw,
   Pencil,
   ChevronLeft,
   ChevronRight,
@@ -28,10 +30,12 @@ const EMPTY_FORM = {
   description: "",
   image: "",
   category: "",
+  minPrice: "",
+  maxPrice: "",
   price: "",
   totalStock: "",
+  cardsPerPack: 5,
   status: "DRAFT",
-  cards: [],
 };
 
 
@@ -42,14 +46,12 @@ export default function AdminPacks() {
   const [categories, setCategories] =
     useState([]);
 
-  const [availableCards, setAvailableCards] =
-    useState([]);
 
   const [loading, setLoading] =
     useState(true);
 
-  const [loadingFormData, setLoadingFormData] =
-    useState(false);
+  // const [loadingFormData, setLoadingFormData] =
+  //   useState(false);
 
   const [saving, setSaving] =
     useState(false);
@@ -86,8 +88,11 @@ export default function AdminPacks() {
   const [form, setForm] =
     useState(EMPTY_FORM);
 
-  const [cardSearch, setCardSearch] =
-    useState("");
+   const [imageFile, setImageFile] =
+     useState(null); 
+
+  // const [cardSearch, setCardSearch] =
+  //   useState("");
 
 const [showCategoryModal, setShowCategoryModal] =
   useState(false);
@@ -100,6 +105,19 @@ const [categoryDescription, setCategoryDescription] =
 
 const [savingCategory, setSavingCategory] =
   useState(false);
+
+
+  const [selectedPack, setSelectedPack] =
+  useState(null);
+
+const [showPackCards, setShowPackCards] =
+  useState(false);
+
+const [loadingPackCards, setLoadingPackCards] =
+  useState(false);
+
+const [packCards, setPackCards] =
+  useState([]);
   // =====================================================
   // FETCH PACKS
   // =====================================================
@@ -223,9 +241,12 @@ const [savingCategory, setSavingCategory] =
           );
         }
 
-        setCategories(
-          data.categories || []
-        );
+        const fetchedCategories =
+          data.categories || [];
+
+        setCategories(fetchedCategories);
+
+        return fetchedCategories;
 
       } catch (error) {
 
@@ -237,62 +258,60 @@ const [savingCategory, setSavingCategory] =
       }
     };
 
+    const openPackCards = async (pack) => {
+  try {
+    setSelectedPack(pack);
+    setShowPackCards(true);
+    setLoadingPackCards(true);
+    setPackCards([]);
 
-  // =====================================================
-  // FETCH SAVED CARDS
-  // =====================================================
+    const token =
+      localStorage.getItem("token");
 
-  const fetchCards =
-    async () => {
-
-      try {
-
-        setLoadingFormData(true);
-
-        const token =
-          localStorage.getItem("token");
-
-        const response =
-          await fetch(
-            `${API_URL}/api/admin/cards?limit=100`,
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-              },
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-              "Unable to load cards"
-          );
-        }
-
-        setAvailableCards(
-          data.data?.cards || []
-        );
-
-      } catch (error) {
-
-        console.error(
-          "Cards error:",
-          error
-        );
-
-        alert(error.message);
-
-      } finally {
-
-        setLoadingFormData(false);
-
+    const response = await fetch(
+      `${API_URL}/api/admin/odds/${pack._id}`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
       }
-    };
+    );
 
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+          "Unable to load pack cards"
+      );
+    }
+
+    console.log("PACK CARDS RESPONSE:", data);
+console.log("PACK CARDS:", data.data?.cards);
+
+setPackCards(
+  data.data?.cards ||
+  data.data?.pack?.cards ||
+  []
+);
+
+  } catch (error) {
+
+    console.error(
+      "Pack cards error:",
+      error
+    );
+
+    alert(error.message);
+
+  } finally {
+
+    setLoadingPackCards(false);
+
+  }
+};
 
   // =====================================================
   // INITIAL
@@ -300,11 +319,12 @@ const [savingCategory, setSavingCategory] =
 
   useEffect(() => {
 
-    fetchPacks(1);
+  fetchPacks(1);
 
-    fetchCategories();
+  fetchCategories();
 
-  }, []);
+
+}, []);
 
 const createCategory = async (e) => {
   e.preventDefault();
@@ -367,98 +387,81 @@ const createCategory = async (e) => {
   // OPEN CREATE
   // =====================================================
 
-  const openCreate =
-    async () => {
+ const openCreate = async () => {
+  setEditingPack(null);
 
-      setEditingPack(null);
+  setForm({
+    ...EMPTY_FORM,
+  });
 
-      setForm(
-        EMPTY_FORM
-      );
+  setImageFile(null);
 
-      setCardSearch("");
+  setShowModal(true);
 
-      setShowModal(true);
-
-      if (
-        availableCards.length === 0
-      ) {
-        await fetchCards();
-      }
-
-      if (
-        categories.length === 0
-      ) {
-        await fetchCategories();
-      }
-    };
-
+  if (categories.length === 0) {
+    await fetchCategories();
+  }
+};
 
   // =====================================================
   // OPEN EDIT
   // =====================================================
 
-  const openEdit =
-    async (pack) => {
+ const openEdit = async (pack) => {
+  setEditingPack(pack);
+  setImageFile(null);
 
-      setEditingPack(pack);
+  let availableCategories = categories;
 
-      setForm({
-        name:
-          pack.name || "",
+  if (availableCategories.length === 0) {
+    availableCategories =
+      (await fetchCategories()) || [];
+  }
 
-        description:
-          pack.description || "",
+  const categoryId =
+    pack.category?._id ||
+    pack.category ||
+    "";
 
-        image:
-          pack.image || "",
+  const selectedCategory =
+    availableCategories.find(
+      (category) =>
+        String(category._id) ===
+        String(categoryId)
+    );
 
-        category:
-          pack.category?._id ||
-          pack.category ||
-          "",
+  setForm({
+    name: pack.name || "",
+    description: pack.description || "",
+    image: "",
 
-        price:
-          pack.price ?? "",
+    category: categoryId,
 
-        totalStock:
-          pack.totalStock ?? "",
+    minPrice:
+      selectedCategory?.minPrice ??
+      pack.priceRange?.min ??
+      "",
 
-        status:
-          pack.status || "DRAFT",
+    maxPrice:
+      selectedCategory?.maxPrice ??
+      pack.priceRange?.max ??
+      "",
 
-        cards:
-          (pack.cards || []).map(
-            (item) => ({
-              card:
-                item.card?._id ||
-                item.card,
+    price:
+      pack.packPrice ?? pack.price ?? "",
 
-              pullWeight:
-                item.pullWeight ?? 0,
+    totalStock:
+      pack.totalStock ?? "",
 
-              quantity:
-                item.quantity ?? 0,
-            })
-          ),
-      });
+    cardsPerPack:
+      pack.cardsPerPack ?? 5,
 
-      setCardSearch("");
+    status:
+      pack.status || "DRAFT",
+  });
 
-      setShowModal(true);
-
-      if (
-        availableCards.length === 0
-      ) {
-        await fetchCards();
-      }
-
-      if (
-        categories.length === 0
-      ) {
-        await fetchCategories();
-      }
-    };
+  setShowModal(true);
+};
 
 
   // =====================================================
@@ -478,95 +481,6 @@ const createCategory = async (e) => {
     );
   };
 
-
-  // =====================================================
-  // ADD CARD
-  // =====================================================
-
-  const addCardToPack =
-    (card) => {
-
-      const alreadyAdded =
-        form.cards.some(
-          (item) =>
-            item.card ===
-            card._id
-        );
-
-      if (alreadyAdded) {
-        return;
-      }
-
-      setForm(
-        (current) => ({
-          ...current,
-
-          cards: [
-            ...current.cards,
-
-            {
-              card: card._id,
-              pullWeight: 1,
-              quantity: 1,
-            },
-          ],
-        })
-      );
-    };
-
-
-  // =====================================================
-  // REMOVE CARD
-  // =====================================================
-
-  const removeCardFromPack =
-    (cardId) => {
-
-      setForm(
-        (current) => ({
-          ...current,
-
-          cards:
-            current.cards.filter(
-              (item) =>
-                item.card !==
-                cardId
-            ),
-        })
-      );
-    };
-
-
-  // =====================================================
-  // UPDATE CARD FIELD
-  // =====================================================
-
-  const updatePackCard =
-    (
-      cardId,
-      field,
-      value
-    ) => {
-
-      setForm(
-        (current) => ({
-          ...current,
-
-          cards:
-            current.cards.map(
-              (item) =>
-                item.card ===
-                cardId
-                  ? {
-                      ...item,
-                      [field]:
-                        value,
-                    }
-                  : item
-            ),
-        })
-      );
-    };
 
 
   // =====================================================
@@ -592,13 +506,45 @@ const createCategory = async (e) => {
         return;
       }
 
+        // if (
+        //   form.price === "" ||
+        //   Number(form.price) < 0
+        // ) {
+        //   alert(
+        //     "Enter a valid price"
+        //   );
+        //   return;
+        // }
+        if (
+  form.minPrice === "" ||
+  form.maxPrice === "" ||
+  Number(form.minPrice) < 0 ||
+  Number(form.maxPrice) < 0
+) {
+  alert(
+    "Enter a valid minimum and maximum price"
+  );
+  return;
+}
+
+if (
+  Number(form.minPrice) >
+  Number(form.maxPrice)
+) {
+  alert(
+    "Minimum price cannot be greater than maximum price"
+  );
+  return;
+}
+
+      const numericPackPrice = Number(form.price);
+
       if (
         form.price === "" ||
-        Number(form.price) < 0
+        !Number.isFinite(numericPackPrice) ||
+        numericPackPrice < 0
       ) {
-        alert(
-          "Enter a valid price"
-        );
+        alert("Enter a valid pack price");
         return;
       }
 
@@ -611,6 +557,18 @@ const createCategory = async (e) => {
         );
         return;
       }
+const numericCardsPerPack =
+  Number(form.cardsPerPack);
+
+if (
+  !Number.isInteger(numericCardsPerPack) ||
+  numericCardsPerPack < 1
+) {
+  alert(
+    "Cards per pack must be a positive whole number"
+  );
+  return;
+}
 
       try {
 
@@ -619,75 +577,117 @@ const createCategory = async (e) => {
         const token =
           localStorage.getItem("token");
 
-        const payload = {
-          name:
-            form.name.trim(),
+//  const payload = {
+//   name: form.name.trim(),
 
-          description:
-            form.description.trim(),
+//   description:
+//     form.description.trim(),
 
-          image:
-            form.image.trim(),
+//   image:
+//     form.image.trim(),
 
-          category:
-            form.category,
+//   category:
+//     form.category,
 
-          price:
-            Number(form.price),
+//   minPrice:
+//     Number(form.minPrice),
 
-          totalStock:
-            Number(
-              form.totalStock
-            ),
+//   maxPrice:
+//     Number(form.maxPrice),
 
-          status:
-            form.status,
+//   totalStock:
+//     Number(form.totalStock),
 
-          cards:
-            form.cards.map(
-              (item) => ({
-                card:
-                  item.card,
+//   cardsPerPack:
+//     numericCardsPerPack,
 
-                pullWeight:
-                  Number(
-                    item.pullWeight
-                  ) || 0,
+//   status:
+//     form.status,
 
-                quantity:
-                  Number(
-                    item.quantity
-                  ) || 0,
-              })
-            ),
-        };
+
+  // cards:
+  //   form.cards.map((item) => ({
+  //     card: item.card,
+  //     pullWeight:
+  //       Number(item.pullWeight) || 0,
+  //     quantity:
+  //       Number(item.quantity) || 0,
+  //   })),
+//};
 
         const url =
           editingPack
             ? `${API_URL}/api/admin/packs/${editingPack._id}`
             : `${API_URL}/api/admin/packs`;
 
-        const response =
-          await fetch(url, {
-            method:
-              editingPack
-                ? "PATCH"
-                : "POST",
+       const formData = new FormData();
 
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
+formData.append(
+  "name",
+  form.name.trim()
+);
 
-              "Content-Type":
-                "application/json",
-            },
+formData.append(
+  "description",
+  form.description.trim()
+);
 
-            body:
-              JSON.stringify(
-                payload
-              ),
-          });
+formData.append(
+  "category",
+  form.category
+);
 
+formData.append(
+  "minPrice",
+  String(Number(form.minPrice))
+);
+
+formData.append(
+  "maxPrice",
+  String(Number(form.maxPrice))
+);
+
+formData.append(
+  "packPrice",
+  String(numericPackPrice)
+);
+
+formData.append(
+  "totalStock",
+  String(Number(form.totalStock))
+);
+
+formData.append(
+  "cardsPerPack",
+  String(Number(form.cardsPerPack))
+);
+
+formData.append(
+  "status",
+  form.status
+);
+
+if (imageFile) {
+  formData.append(
+    "image",
+    imageFile
+  );
+}
+
+const response =
+  await fetch(url, {
+    method:
+      editingPack
+        ? "PATCH"
+        : "POST",
+
+    headers: {
+      Authorization:
+        `Bearer ${token}`,
+    },
+
+    body: formData,
+  });
         const data =
           await response.json();
 
@@ -698,11 +698,13 @@ const createCategory = async (e) => {
           );
         }
 
-        setShowModal(false);
+setShowModal(false);
 
-        setForm(
-          EMPTY_FORM
-        );
+setForm(
+  EMPTY_FORM
+);
+
+setImageFile(null);
 
         await fetchPacks(
           page
@@ -726,107 +728,117 @@ const createCategory = async (e) => {
 
 
   // =====================================================
-  // ARCHIVE
+  // ARCHIVE / UNARCHIVE
   // =====================================================
 
-  const archivePack =
-    async (pack) => {
+  const archivePack = async (pack) => {
+    const isArchived = pack.status === "ARCHIVED";
 
-      const confirmed =
-        window.confirm(
-          `Archive "${pack.name}"?`
-        );
+    const confirmed = window.confirm(
+      isArchived
+        ? `Unarchive "${pack.name}"?`
+        : `Archive "${pack.name}"?`
+    );
 
-      if (!confirmed) {
-        return;
-      }
+    if (!confirmed) {
+      return;
+    }
 
-      try {
+    try {
+      setDeletingId(pack._id);
 
-        setDeletingId(
-          pack._id
-        );
+      const token = localStorage.getItem("token");
 
-        const token =
-          localStorage.getItem("token");
-
-        const response =
-          await fetch(
-            `${API_URL}/api/admin/packs/${pack._id}`,
-            {
-              method: "DELETE",
-
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-              },
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-              "Unable to archive pack"
-          );
+      const response = await fetch(
+        `${API_URL}/api/admin/packs/${pack._id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: isArchived ? "PUBLISHED" : "ARCHIVED",
+          }),
         }
-
-        await fetchPacks(
-          page
-        );
-
-      } catch (error) {
-
-        console.error(
-          "Archive error:",
-          error
-        );
-
-        alert(error.message);
-
-      } finally {
-
-        setDeletingId("");
-
-      }
-    };
-
-
-  // =====================================================
-  // FILTERED CARDS
-  // =====================================================
-
-  const filteredCards =
-    useMemo(() => {
-
-      const query =
-        cardSearch
-          .trim()
-          .toLowerCase();
-
-      if (!query) {
-        return availableCards;
-      }
-
-      return availableCards.filter(
-        (card) =>
-          card.name
-            ?.toLowerCase()
-            .includes(query) ||
-          card.tcgId
-            ?.toLowerCase()
-            .includes(query) ||
-          card.set?.name
-            ?.toLowerCase()
-            .includes(query)
       );
 
-    }, [
-      availableCards,
-      cardSearch,
-    ]);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            (isArchived
+              ? "Unable to unarchive pack"
+              : "Unable to archive pack")
+        );
+      }
+
+      await fetchPacks(page);
+    } catch (error) {
+      console.error(
+        isArchived
+          ? "Unarchive error:"
+          : "Archive error:",
+        error
+      );
+
+      alert(error.message);
+    } finally {
+      setDeletingId("");
+    }
+  };
+
+  // =====================================================
+  // PERMANENTLY DELETE PACK
+  // =====================================================
+
+  const permanentlyDeletePack = async (pack) => {
+    const confirmed = window.confirm(
+      `PERMANENTLY DELETE "${pack.name}"?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingId(pack._id);
+
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API_URL}/api/admin/packs/${pack._id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Unable to delete pack"
+        );
+      }
+
+      await fetchPacks(page);
+    } catch (error) {
+      console.error(
+        "Delete pack error:",
+        error
+      );
+
+      alert(error.message);
+    } finally {
+      setDeletingId("");
+    }
+  };
+
 
 
   return (
@@ -1068,8 +1080,8 @@ const createCategory = async (e) => {
                   </th>
 
                   <th className="px-6 py-4 text-[9px] font-black tracking-wider text-[#777]">
-                    PRICE
-                  </th>
+                     PRICE
+                   </th>
 
                   <th className="px-6 py-4 text-[9px] font-black tracking-wider text-[#777]">
                     STOCK
@@ -1115,7 +1127,11 @@ const createCategory = async (e) => {
 
                       <td className="px-6 py-5">
 
-                        <div className="flex items-center gap-3">
+                        <button
+  type="button"
+  onClick={() => openPackCards(pack)}
+  className="flex items-center gap-3 text-left"
+>
 
                           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-black/5">
 
@@ -1152,17 +1168,12 @@ const createCategory = async (e) => {
                             </p>
 
                             <p className="mt-1 text-[9px] text-[#888]">
-                              {
-                                pack.cards
-                                  ?.length ||
-                                0
-                              }{" "}
-                              cards
-                            </p>
+  {pack.cardsPerPack || 0} cards / pack
+</p>
 
                           </div>
 
-                        </div>
+                        </button>
 
                       </td>
 
@@ -1181,12 +1192,57 @@ const createCategory = async (e) => {
                       </td>
 
 
-                      <td className="px-6 py-5 text-xs font-black">
-                        $
-                        {Number(
-                          pack.price
-                        ).toFixed(2)}
-                      </td>
+<td className="px-6 py-5">
+  <div>
+    {/* PACK SELLING PRICE */}
+    <p className="text-xs font-black">
+      $
+      {Number(
+        pack.packPrice ?? pack.price ?? 0
+      ).toFixed(2)}
+    </p>
+
+    {/* CATEGORY CARD PRICE RANGE */}
+    <p className="mt-1 text-[9px] font-semibold text-[#888]">
+      Card range:{" "}
+      {pack.category ? (
+        <>
+          $
+          {Number(
+            pack.category.minPrice ?? 0
+          ).toFixed(2)}
+          {" - "}
+          {pack.category.maxPrice === null ||
+          pack.category.maxPrice === undefined ? (
+            "No limit"
+          ) : (
+            `$${Number(
+              pack.category.maxPrice
+            ).toFixed(2)}`
+          )}
+        </>
+      ) : pack.priceRange ? (
+        <>
+          $
+          {Number(
+            pack.priceRange.min ?? 0
+          ).toFixed(2)}
+          {" - "}
+          {pack.priceRange.max === null ||
+          pack.priceRange.max === undefined ? (
+            "No limit"
+          ) : (
+            `$${Number(
+              pack.priceRange.max
+            ).toFixed(2)}`
+          )}
+        </>
+      ) : (
+        "Not available"
+      )}
+    </p>
+  </div>
+</td>
 
 
                       <td className="px-6 py-5">
@@ -1238,33 +1294,57 @@ const createCategory = async (e) => {
                           </button>
 
 
+                          {/* ARCHIVE / UNARCHIVE */}
                           <button
+                            type="button"
                             onClick={() =>
-                              archivePack(
-                                pack
-                              )
+                              archivePack(pack)
                             }
                             disabled={
-                              deletingId ===
-                              pack._id
+                              deletingId === pack._id
+                            }
+                            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-black disabled:opacity-40 ${
+                              pack.status === "ARCHIVED"
+                                ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
+                                : "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20"
+                            }`}
+                          >
+                            {deletingId === pack._id ? (
+                              <Loader2
+                                size={13}
+                                className="animate-spin"
+                              />
+                            ) : pack.status === "ARCHIVED" ? (
+                              <RotateCcw size={13} />
+                            ) : (
+                              <Archive size={13} />
+                            )}
+
+                            {pack.status === "ARCHIVED"
+                              ? "Unarchive"
+                              : "Archive"}
+                          </button>
+
+                          {/* PERMANENT DELETE */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              permanentlyDeletePack(pack)
+                            }
+                            disabled={
+                              deletingId === pack._id
                             }
                             className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-2 text-[10px] font-black text-red-500 hover:bg-red-500/20 disabled:opacity-40"
                           >
-
-                            {deletingId ===
-                            pack._id ? (
+                            {deletingId === pack._id ? (
                               <Loader2
                                 size={13}
                                 className="animate-spin"
                               />
                             ) : (
-                              <Trash2
-                                size={13}
-                              />
+                              <Trash2 size={13} />
                             )}
-
-                            Archive
-
+                            Delete
                           </button>
 
                         </div>
@@ -1385,7 +1465,7 @@ const createCategory = async (e) => {
                 scale: 0.96,
                 y: 20,
               }}
-              className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-[#f4f4f4] shadow-2xl"
+              className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-[#f4f4f4] shadow-2xl"
             >
 
               {/* Modal Header */}
@@ -1425,14 +1505,13 @@ const createCategory = async (e) => {
                 onSubmit={
                   savePack
                 }
-                className="p-6"
+                className="p-4 flex flex-col"
               >
 
-                <div className="grid gap-6 lg:grid-cols-[350px_1fr]">
+<div className="grid gap-4 grid-cols-1">
+                    {/* LEFT */}
 
-                  {/* LEFT */}
-
-                  <div className="space-y-5">
+                  <div className="space-y-3">
 
                     <div>
 
@@ -1467,12 +1546,32 @@ const createCategory = async (e) => {
                         value={
                           form.category
                         }
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const categoryId =
+                            e.target.value;
+
+                          const selectedCategory =
+                            categories.find(
+                              (category) =>
+                                String(category._id) ===
+                                String(categoryId)
+                            );
+
                           updateField(
                             "category",
-                            e.target.value
-                          )
-                        }
+                            categoryId
+                          );
+
+                          updateField(
+                            "minPrice",
+                            selectedCategory?.minPrice ?? ""
+                          );
+
+                          updateField(
+                            "maxPrice",
+                            selectedCategory?.maxPrice ?? ""
+                          );
+                        }}
                         className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-4 text-xs font-bold outline-none focus:border-[#238bdc]"
                       >
 
@@ -1508,25 +1607,104 @@ const createCategory = async (e) => {
                           )}
 
                       </select>
+                      {/* {form.category && (
+  <div className="mt-3 rounded-xl border border-black/10 bg-white px-4 py-3">
+    <p className="text-[10px] font-black text-[#555]">
+      CARD PRICE RANGE
+    </p>
+
+    {(() => {
+      const selectedCategory =
+        categories.find(
+          (category) =>
+            String(category._id) ===
+            String(form.category)
+        );
+
+      if (!selectedCategory) {
+        return (
+          <p className="mt-1 text-xs font-bold text-[#999]">
+            Category not found
+          </p>
+        );
+      }
+
+      return (
+        <p className="mt-1 text-sm font-black text-[#238bdc]">
+          ${Number(
+            selectedCategory.minPrice || 0
+          ).toFixed(2)}
+
+          {" - "}
+
+          {selectedCategory.maxPrice === null ||
+          selectedCategory.maxPrice === undefined
+            ? "No limit"
+            : `$${Number(
+                selectedCategory.maxPrice
+              ).toFixed(2)}`}
+        </p>
+      );
+    })()}
+  </div>
+)} */}
 
                     </div>
 
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+
+                      {/* CATEGORY CARD PRICE RANGE - AUTOMATIC */}
+                      <div>
+                        <label className="text-[10px] font-black text-[#555]">
+                          MINIMUM CARD PRICE
+                        </label>
+
+                        <input
+                          type="text"
+                          readOnly
+                          value={
+                            form.category &&
+                            form.minPrice !== ""
+                              ? `$${Number(form.minPrice).toFixed(2)}`
+                              : "Select category"
+                          }
+                          className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-black/[0.03] px-4 text-xs font-bold text-[#777] outline-none"
+                        />
+                      </div>
 
                       <div>
-
                         <label className="text-[10px] font-black text-[#555]">
-                          PRICE
+                          MAXIMUM CARD PRICE
+                        </label>
+
+                        <input
+                          type="text"
+                          readOnly
+                          value={
+                            !form.category
+                              ? "Select category"
+                              : form.maxPrice === "" ||
+                                form.maxPrice === null ||
+                                form.maxPrice === undefined
+                              ? "No limit"
+                              : `$${Number(form.maxPrice).toFixed(2)}`
+                          }
+                          className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-black/[0.03] px-4 text-xs font-bold text-[#777] outline-none"
+                        />
+                      </div>
+
+                      {/* ADMIN-CONTROLLED PACK PRICE */}
+                      <div>
+                        <label className="text-[10px] font-black text-[#555]">
+                          PACK PRICE
                         </label>
 
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={
-                            form.price
-                          }
+                          value={form.price}
                           onChange={(e) =>
                             updateField(
                               "price",
@@ -1537,11 +1715,13 @@ const createCategory = async (e) => {
                           className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-4 text-xs font-bold outline-none focus:border-[#238bdc]"
                         />
 
+                        <p className="mt-1 text-[9px] text-[#888]">
+                          Selling price set by admin
+                        </p>
                       </div>
 
-
+                      {/* STOCK */}
                       <div>
-
                         <label className="text-[10px] font-black text-[#555]">
                           STOCK
                         </label>
@@ -1550,9 +1730,7 @@ const createCategory = async (e) => {
                           type="number"
                           min="0"
                           step="1"
-                          value={
-                            form.totalStock
-                          }
+                          value={form.totalStock}
                           onChange={(e) =>
                             updateField(
                               "totalStock",
@@ -1562,13 +1740,37 @@ const createCategory = async (e) => {
                           placeholder="500"
                           className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-4 text-xs font-bold outline-none focus:border-[#238bdc]"
                         />
+                      </div>
 
+                      {/* CARDS PER PACK */}
+                      <div>
+                        <label className="text-[10px] font-black text-[#555]">
+                          CARDS PER PACK
+                        </label>
+
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={form.cardsPerPack}
+                          onChange={(e) =>
+                            updateField(
+                              "cardsPerPack",
+                              e.target.value
+                            )
+                          }
+                          placeholder="5"
+                          className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-4 text-xs font-bold outline-none focus:border-[#238bdc]"
+                        />
                       </div>
 
                     </div>
 
 
-                    <div>
+                    </div>
+
+
+                    {/* <div>
 
                       <label className="text-[10px] font-black text-[#555]">
                         IMAGE URL
@@ -1588,7 +1790,40 @@ const createCategory = async (e) => {
                         className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-4 text-xs font-semibold outline-none focus:border-[#238bdc]"
                       />
 
-                    </div>
+                    </div> */}
+
+                    <div>
+  <label className="text-[10px] font-black text-[#555]">
+    PACK IMAGE
+  </label>
+
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) =>
+      setImageFile(
+        e.target.files?.[0] || null
+      )
+    }
+    className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-xs font-semibold outline-none focus:border-[#238bdc]"
+  />
+
+  {imageFile && (
+  <div className="mt-2">
+    <img
+      src={URL.createObjectURL(imageFile)}
+      alt="Pack preview"
+      className="h-20 w-20 rounded-lg object-cover border border-black/10"
+    />
+  </div>
+)}
+
+  {imageFile && (
+    <p className="mt-1 text-[9px] font-semibold text-[#777]">
+      Selected: {imageFile.name}
+    </p>
+  )}
+</div>
 
 
                     <div>
@@ -1598,7 +1833,7 @@ const createCategory = async (e) => {
                       </label>
 
                       <textarea
-                        rows={5}
+                        rows={3}
                         value={
                           form.description
                         }
@@ -1655,9 +1890,9 @@ const createCategory = async (e) => {
 
                   {/* RIGHT */}
 
-                  <div className="space-y-5">
+                   <div className="space-y-3">
 
-                    <div>
+                  {/*  <div>
 
                       <div className="flex items-end justify-between gap-3">
 
@@ -1705,323 +1940,22 @@ const createCategory = async (e) => {
                           className="h-10 w-full rounded-xl border border-black/10 bg-white pl-9 pr-3 text-xs font-semibold outline-none focus:border-[#238bdc]"
                         />
 
-                      </div>
+                      </div> */}
 
                     </div>
 
-
-                    {/* CARD SELECTOR */}
-
-                    <div className="max-h-[300px] space-y-2 overflow-y-auto rounded-2xl border border-black/10 bg-white p-3">
-
-                      {loadingFormData ? (
-
-                        <div className="flex h-32 items-center justify-center">
-
-                          <Loader2
-                            size={22}
-                            className="animate-spin text-[#238bdc]"
-                          />
-
-                        </div>
-
-                      ) : filteredCards.length === 0 ? (
-
-                        <div className="flex h-32 flex-col items-center justify-center text-center">
-
-                          <ImageOff
-                            size={22}
-                            className="text-[#aaa]"
-                          />
-
-                          <p className="mt-2 text-xs font-bold text-[#777]">
-                            No saved cards found.
-                          </p>
-
-                        </div>
-
-                      ) : (
-
-                        filteredCards.map(
-                          (card) => {
-
-                            const selected =
-                              form.cards.some(
-                                (item) =>
-                                  item.card ===
-                                  card._id
-                              );
-
-                            return (
-
-                              <div
-                                key={
-                                  card._id
-                                }
-                                className="flex items-center gap-3 rounded-xl border border-black/5 bg-[#fafafa] p-2.5"
-                              >
-
-                                <img
-                                  src={
-                                    card.imageSmall
-                                  }
-                                  alt={
-                                    card.name
-                                  }
-                                  className="h-14 w-10 rounded-md object-cover"
-                                />
-
-
-                                <div className="min-w-0 flex-1">
-
-                                  <p className="truncate text-xs font-black">
-                                    {
-                                      card.name
-                                    }
-                                  </p>
-
-                                  <p className="truncate text-[9px] text-[#888]">
-                                    {
-                                      card
-                                        .set
-                                        ?.name
-                                    }
-                                    {" • "}
-                                    #
-                                    {
-                                      card.number
-                                    }
-                                  </p>
-
-                                </div>
-
-
-                                <button
-                                  type="button"
-                                  disabled={
-                                    selected
-                                  }
-                                  onClick={() =>
-                                    addCardToPack(
-                                      card
-                                    )
-                                  }
-                                  className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                                    selected
-                                      ? "bg-green-500/10 text-green-500"
-                                      : "bg-[#238bdc]/10 text-[#238bdc] hover:bg-[#238bdc]/20"
-                                  }`}
-                                >
-
-                                  {selected ? (
-                                    <Check
-                                      size={14}
-                                    />
-                                  ) : (
-                                    <Plus
-                                      size={14}
-                                    />
-                                  )}
-
-                                </button>
-
-                              </div>
-
-                            );
-                          }
-                        )
-
-                      )}
-
-                    </div>
-
-
-                    {/* SELECTED CARDS */}
-
-                    <div>
-
-                      <p className="text-[10px] font-black text-[#555]">
-                        SELECTED CARDS
-                      </p>
-
-
-                      <div className="mt-3 space-y-2">
-
-                        {form.cards.length ===
-                        0 ? (
-
-                          <div className="rounded-2xl border border-dashed border-black/15 p-8 text-center">
-
-                            <Package
-                              size={24}
-                              className="mx-auto text-[#aaa]"
-                            />
-
-                            <p className="mt-2 text-xs font-bold text-[#777]">
-                              No cards selected
-                            </p>
-
-                          </div>
-
-                        ) : (
-
-                          form.cards.map(
-                            (packCard) => {
-
-                              const card =
-                                availableCards.find(
-                                  (
-                                    item
-                                  ) =>
-                                    item._id ===
-                                    packCard.card
-                                );
-
-                              if (!card) {
-                                return null;
-                              }
-
-                              return (
-
-                                <div
-                                  key={
-                                    card._id
-                                  }
-                                  className="rounded-2xl border border-black/10 bg-white p-3"
-                                >
-
-                                  <div className="flex items-center gap-3">
-
-                                    <img
-                                      src={
-                                        card.imageSmall
-                                      }
-                                      alt={
-                                        card.name
-                                      }
-                                      className="h-16 w-12 rounded-lg object-cover"
-                                    />
-
-                                    <div className="min-w-0 flex-1">
-
-                                      <p className="truncate text-xs font-black">
-                                        {
-                                          card.name
-                                        }
-                                      </p>
-
-                                      <p className="mt-1 text-[9px] text-[#888]">
-                                        {
-                                          card
-                                            .set
-                                            ?.name
-                                        }
-                                      </p>
-
-                                    </div>
-
-
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        removeCardFromPack(
-                                          card._id
-                                        )
-                                      }
-                                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
-                                    >
-                                      <X
-                                        size={14}
-                                      />
-                                    </button>
-
-                                  </div>
-
-
-                                  <div className="mt-3 grid grid-cols-2 gap-3">
-
-                                    <div>
-
-                                      <label className="text-[9px] font-black text-[#777]">
-                                        PULL WEIGHT
-                                      </label>
-
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={
-                                          packCard.pullWeight
-                                        }
-                                        onChange={(e) =>
-                                          updatePackCard(
-                                            card._id,
-                                            "pullWeight",
-                                            e.target.value
-                                          )
-                                        }
-                                        className="mt-1 h-9 w-full rounded-lg border border-black/10 px-3 text-xs font-bold outline-none focus:border-[#238bdc]"
-                                      />
-
-                                    </div>
-
-
-                                    <div>
-
-                                      <label className="text-[9px] font-black text-[#777]">
-                                        QUANTITY
-                                      </label>
-
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={
-                                          packCard.quantity
-                                        }
-                                        onChange={(e) =>
-                                          updatePackCard(
-                                            card._id,
-                                            "quantity",
-                                            e.target.value
-                                          )
-                                        }
-                                        className="mt-1 h-9 w-full rounded-lg border border-black/10 px-3 text-xs font-bold outline-none focus:border-[#238bdc]"
-                                      />
-
-                                    </div>
-
-                                  </div>
-
-                                </div>
-
-                              );
-                            }
-                          )
-
-                        )}
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
 
 
                 {/* FOOTER */}
 
-                <div className="mt-7 flex flex-col-reverse gap-3 border-t border-black/10 pt-5 sm:flex-row sm:justify-end">
-
-                  <button
+<div className="sticky bottom-0 z-10 mt-2 flex flex-col-reverse gap-2 border-t border-black/10 bg-[#f4f4f4] pt-2 sm:flex-row sm:justify-end">                  <button
                     type="button"
                     onClick={() =>
                       setShowModal(
                         false
                       )
                     }
-                    className="rounded-xl bg-black/5 px-5 py-3 text-xs font-black text-[#505258] hover:bg-black/10"
+                   className="rounded-lg bg-black/5 px-4 py-2 text-xs font-black text-[#505258] hover:bg-black/10"
                   >
                     Cancel
                   </button>
@@ -2032,7 +1966,7 @@ const createCategory = async (e) => {
                     disabled={
                       saving
                     }
-                    className="flex items-center justify-center gap-2 rounded-xl bg-[#238bdc] px-6 py-3 text-xs font-black text-white hover:bg-[#1678c4] disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 rounded-lg bg-[#238bdc] px-5 py-2 text-xs font-black text-white hover:bg-[#1678c4] disabled:opacity-50"
                   >
 
                     {saving ? (
@@ -2056,9 +1990,11 @@ const createCategory = async (e) => {
 
                   </button>
 
-                </div>
+                                 </div>
 
               </form>
+
+              
 
             </motion.div>
 
@@ -2239,29 +2175,18 @@ const createCategory = async (e) => {
 // STATUS
 // =========================================================
 
-function StatusBadge({
-  status,
-}) {
-
+function StatusBadge({ status }) {
   const styles = {
-    DRAFT:
-      "bg-yellow-500/10 text-yellow-600",
-
-    PUBLISHED:
-      "bg-green-500/10 text-green-600",
-
-    PAUSED:
-      "bg-orange-500/10 text-orange-600",
-
-    ARCHIVED:
-      "bg-red-500/10 text-red-500",
+    DRAFT: "bg-yellow-500/10 text-yellow-600",
+    PUBLISHED: "bg-green-500/10 text-green-600",
+    PAUSED: "bg-orange-500/10 text-orange-600",
+    ARCHIVED: "bg-red-500/10 text-red-500",
   };
 
   return (
     <span
       className={`rounded-full px-3 py-1.5 text-[9px] font-black ${
-        styles[status] ||
-        "bg-black/5 text-[#777]"
+        styles[status] || "bg-black/5 text-[#777]"
       }`}
     >
       {status}
