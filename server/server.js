@@ -15,6 +15,15 @@ const {
 } = require("./controllers/adminInventoryController");
 
 // =====================================================
+// RIP EXPIRY SERVICE
+// Automatically sells revealed cards after 5 minutes
+// =====================================================
+
+const {
+  processExpiredRipCards,
+} = require("./services/ripExpiryService");
+
+// =====================================================
 // ROUTES
 // =====================================================
 
@@ -68,6 +77,8 @@ const adminWalletRoutes =
 
 const ripRoutes =
   require("./routes/ripRoutes");
+  const adminReportRoutes =
+  require("./routes/adminReportRoutes");
 
 // =====================================================
 // APP
@@ -122,7 +133,6 @@ cron.schedule(
       console.log(
         "========================================"
       );
-
     } catch (error) {
       console.error(
         "Daily price update failed:",
@@ -136,6 +146,31 @@ cron.schedule(
   },
   {
     timezone: "America/New_York",
+  }
+);
+
+// =====================================================
+// RIP CARD EXPIRY CHECK
+//
+// Runs every 10 seconds.
+//
+// If a revealed card has passed its 5-minute
+// decision deadline and the user did not choose
+// SELL or SHIP, it is automatically sold.
+//
+// =====================================================
+
+cron.schedule(
+  "*/10 * * * * *",
+  async () => {
+    try {
+      await processExpiredRipCards();
+    } catch (error) {
+      console.error(
+        "RIP expiry check failed:",
+        error.message
+      );
+    }
   }
 );
 
@@ -214,8 +249,10 @@ app.use(
   "/api/admin/inventory",
   adminInventoryRoutes
 );
-
-
+app.use(
+  "/api/admin/report",
+  adminReportRoutes
+);
 // =====================================================
 // ORDERS
 // =====================================================
@@ -314,7 +351,6 @@ app.get(
             price: pack.price,
           })),
       });
-
     } catch (error) {
       console.error(error);
 
@@ -347,6 +383,14 @@ app.listen(
 
     console.log(
       "Next automatic price update: 2:00 AM IST."
+    );
+
+    console.log(
+      "RIP 5-minute expiry scheduler is active."
+    );
+
+    console.log(
+      "RIP expiry checks run every 10 seconds."
     );
   }
 );

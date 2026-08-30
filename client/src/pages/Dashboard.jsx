@@ -118,6 +118,10 @@ const fetchWalletBalance = async () => {
     );
 
     const data = await response.json();
+    console.log(
+  "FULL DASHBOARD RESPONSE:",
+  JSON.stringify(data, null, 2)
+);
 
     console.log("Wallet API response:", data);
 
@@ -373,19 +377,24 @@ const fetchWalletBalance = async () => {
             {pack.name}
           </h3>
 
-          <span
-            className="
-              shrink-0
-              font-['Plus_Jakarta_Sans',sans-serif]
-              text-[12px]
-              font-extrabold
-              leading-[16px]
-              tracking-[-0.35px]
-              text-[#111214]
-            "
-          >
-            ${Number(pack.price || 0).toFixed(0)}
-          </span>
+<span
+  className="
+    shrink-0
+    font-['Plus_Jakarta_Sans',sans-serif]
+    text-[12px]
+    font-extrabold
+    leading-[16px]
+    tracking-[-0.35px]
+    text-[#111214]
+  "
+>
+  $
+  {Number(
+    pack.packPrice ??
+    pack.price ??
+    0
+  ).toFixed(2)}
+</span>
 
         </div>
 

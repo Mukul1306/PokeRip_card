@@ -19,6 +19,17 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:5000";
 
+// =====================================================
+// PACK PRICE HELPER
+// Backend Pack model uses packPrice. Keep price as a
+// fallback so older packs/data continue to work.
+// =====================================================
+const getPackPrice = (pack) => {
+  const value = pack?.packPrice ?? pack?.price;
+  const price = Number(value);
+  return Number.isFinite(price) ? price : 0;
+};
+
 export default function RipPack() {
   const { packId } = useParams();
   const navigate = useNavigate();
@@ -496,9 +507,7 @@ export default function RipPack() {
         text-[#292A2E]
       "
     >
-      ${Number(
-        pack.price || 0
-      ).toFixed(0)}
+      ${getPackPrice(pack).toFixed(2)}
     </span>
 
     <span
@@ -807,9 +816,7 @@ export default function RipPack() {
               text-[#555]
             "
           >
-            ${Number(
-              otherPack.price || 0
-            ).toFixed(0)}
+            ${getPackPrice(otherPack).toFixed(2)}
           </p>
 
         </button>

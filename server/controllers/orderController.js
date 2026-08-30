@@ -22,7 +22,6 @@ const createTestOrder = async (
       quantity = 1,
     } = req.body;
 
-
     if (
       !mongoose.Types.ObjectId.isValid(
         packId
@@ -34,9 +33,7 @@ const createTestOrder = async (
       });
     }
 
-
     const qty = Number(quantity);
-
 
     if (
       !Number.isInteger(qty) ||
@@ -49,10 +46,8 @@ const createTestOrder = async (
       });
     }
 
-
     const pack =
       await Pack.findById(packId);
-
 
     if (!pack) {
       return res.status(404).json({
@@ -61,18 +56,13 @@ const createTestOrder = async (
       });
     }
 
-
     // -------------------------------------------------
     // FIND USER
     // -------------------------------------------------
 
-    // This assumes your auth middleware puts
-    // the logged-in user's ID in req.user.id
-
     const userId =
       req.user?.id ||
       req.user?._id;
-
 
     if (!userId) {
       return res.status(401).json({
@@ -81,10 +71,8 @@ const createTestOrder = async (
       });
     }
 
-
     const user =
       await User.findById(userId);
-
 
     if (!user) {
       return res.status(404).json({
@@ -92,7 +80,6 @@ const createTestOrder = async (
         message: "User not found",
       });
     }
-
 
     // -------------------------------------------------
     // GET PACK PRICE
@@ -105,10 +92,8 @@ const createTestOrder = async (
         0
       );
 
-
     const totalAmount =
       price * qty;
-
 
     // -------------------------------------------------
     // CREATE TEST ORDER
@@ -133,7 +118,6 @@ const createTestOrder = async (
         orderStatus: "COMPLETED",
       });
 
-
     const populatedOrder =
       await Order.findById(
         order._id
@@ -147,9 +131,7 @@ const createTestOrder = async (
           "name price image description"
         );
 
-
     return res.status(201).json({
-
       success: true,
 
       message:
@@ -159,11 +141,9 @@ const createTestOrder = async (
         order:
           populatedOrder,
       },
-
     });
 
   } catch (error) {
-
     console.error(
       "Create test order error:",
       error
@@ -176,7 +156,6 @@ const createTestOrder = async (
   }
 };
 
-
 // =====================================================
 // GET ALL ORDERS - ADMIN
 // GET /api/admin/orders
@@ -187,7 +166,6 @@ const getAllOrders = async (
   res
 ) => {
   try {
-
     const page = Math.max(
       parseInt(req.query.page) || 1,
       1
@@ -207,13 +185,10 @@ const getAllOrders = async (
     const orderStatus =
       req.query.orderStatus || "";
 
-
     const skip =
       (page - 1) * limit;
 
-
     const filter = {};
-
 
     if (
       paymentStatus &&
@@ -228,7 +203,6 @@ const getAllOrders = async (
         paymentStatus;
     }
 
-
     if (
       orderStatus &&
       [
@@ -241,11 +215,9 @@ const getAllOrders = async (
         orderStatus;
     }
 
-
     // Search user name/email/order number
 
     if (search) {
-
       const users =
         await User.find({
           $or: [
@@ -263,7 +235,6 @@ const getAllOrders = async (
             },
           ],
         }).select("_id");
-
 
       filter.$or = [
         {
@@ -283,12 +254,10 @@ const getAllOrders = async (
       ];
     }
 
-
     const [
       orders,
       totalOrders,
     ] = await Promise.all([
-
       Order.find(filter)
         .populate(
           "user",
@@ -309,33 +278,29 @@ const getAllOrders = async (
       ),
     ]);
 
-
     return res.status(200).json({
-
       success: true,
 
       data: {
-
         orders,
 
         pagination: {
           page,
+
           limit,
+
           totalOrders,
 
           totalPages:
             Math.ceil(
               totalOrders /
-                limit
+              limit
             ),
         },
-
       },
-
     });
 
   } catch (error) {
-
     console.error(
       "Get orders error:",
       error
@@ -348,7 +313,6 @@ const getAllOrders = async (
   }
 };
 
-
 // =====================================================
 // GET ORDER BY ID
 // GET /api/admin/orders/:id
@@ -359,10 +323,8 @@ const getOrderById = async (
   res
 ) => {
   try {
-
     const { id } =
       req.params;
-
 
     if (
       !mongoose.Types.ObjectId.isValid(
@@ -375,7 +337,6 @@ const getOrderById = async (
       });
     }
 
-
     const order =
       await Order.findById(id)
         .populate(
@@ -387,7 +348,6 @@ const getOrderById = async (
           "name price image description"
         );
 
-
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -395,16 +355,15 @@ const getOrderById = async (
       });
     }
 
-
     return res.status(200).json({
       success: true,
+
       data: {
         order,
       },
     });
 
   } catch (error) {
-
     console.error(
       "Get order error:",
       error
@@ -417,65 +376,181 @@ const getOrderById = async (
   }
 };
 
-const createOrder = async (req, res) => {
-  const session = await mongoose.startSession();
+// =====================================================
+// CREATE ORDER
+// POST /api/orders
+// =====================================================
+
+const createOrder = async (
+  req,
+  res
+) => {
+  const session =
+    await mongoose.startSession();
 
   try {
-    const userId = req.user.id;
-    const { packId, quantity = 1 } = req.body;
+    const userId =
+      req.user?.id ||
+      req.user?._id;
 
-    const qty = Number(quantity);
+    const {
+      packId,
+      quantity = 1,
+    } = req.body;
+
+    const qty =
+      Number(quantity);
+
+    // =================================================
+    // VALIDATION
+    // =================================================
 
     if (!packId) {
       return res.status(400).json({
         success: false,
-        message: "Pack ID is required",
+        message:
+          "Pack ID is required",
       });
     }
 
-    if (!Number.isInteger(qty) || qty <= 0) {
+    if (
+      !Number.isInteger(qty) ||
+      qty <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid quantity",
+        message:
+          "Invalid quantity",
       });
     }
 
-    // Start transaction
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "User not authenticated",
+      });
+    }
+
+    // =================================================
+    // START TRANSACTION
+    // =================================================
+
     session.startTransaction();
 
     // =================================================
     // GET PACK
     // =================================================
 
-    const pack = await Pack.findById(packId).session(session);
+    const pack =
+      await Pack.findById(
+        packId
+      ).session(session);
 
     if (!pack) {
       await session.abortTransaction();
 
       return res.status(404).json({
         success: false,
-        message: "Pack not found",
+        message:
+          "Pack not found",
       });
     }
 
-    if (pack.status !== "PUBLISHED") {
+    // =================================================
+    // CHECK PACK STATUS
+    // =================================================
+
+    if (
+      pack.status !==
+      "PUBLISHED"
+    ) {
       await session.abortTransaction();
 
       return res.status(400).json({
         success: false,
-        message: "This pack is not available",
+        message:
+          "This pack is not available",
       });
     }
 
-    const packPrice = Number(pack.price || 0);
-    const totalAmount = packPrice * qty;
+    // =================================================
+    // REAL PACK PRICE
+    // =================================================
+    //
+    // IMPORTANT:
+    //
+    // Your pack selling price can be stored in:
+    //
+    //     pack.packPrice
+    //
+    // Older packs may have:
+    //
+    //     pack.price
+    //
+    // Use packPrice first and price as fallback.
+    //
+    // =================================================
 
-    if (totalAmount <= 0) {
+    const packPrice =
+      Number(
+        pack.packPrice ??
+        pack.price ??
+        0
+      );
+
+    console.log(
+      "========================================"
+    );
+
+    console.log(
+      "PURCHASE PACK"
+    );
+
+    console.log(
+      "Pack ID:",
+      pack._id.toString()
+    );
+
+    console.log(
+      "Pack Name:",
+      pack.name
+    );
+
+    console.log(
+      "pack.packPrice:",
+      pack.packPrice
+    );
+
+    console.log(
+      "pack.price:",
+      pack.price
+    );
+
+    console.log(
+      "Final pack price:",
+      packPrice
+    );
+
+    console.log(
+      "========================================"
+    );
+
+    const totalAmount =
+      packPrice * qty;
+
+    if (
+      !Number.isFinite(
+        totalAmount
+      ) ||
+      totalAmount <= 0
+    ) {
       await session.abortTransaction();
 
       return res.status(400).json({
         success: false,
-        message: "Invalid pack price",
+        message:
+          "Invalid pack price",
       });
     }
 
@@ -483,16 +558,18 @@ const createOrder = async (req, res) => {
     // GET USER WALLET
     // =================================================
 
-    const wallet = await Wallet.findOne({
-      user: userId,
-    }).session(session);
+    const wallet =
+      await Wallet.findOne({
+        user: userId,
+      }).session(session);
 
     if (!wallet) {
       await session.abortTransaction();
 
       return res.status(400).json({
         success: false,
-        message: "Wallet not found",
+        message:
+          "Wallet not found",
       });
     }
 
@@ -500,14 +577,18 @@ const createOrder = async (req, res) => {
     // CHECK BALANCE
     // =================================================
 
-    if (Number(wallet.balance) < totalAmount) {
+    if (
+      Number(wallet.balance) <
+      totalAmount
+    ) {
       await session.abortTransaction();
 
       return res.status(400).json({
         success: false,
-        message: `Insufficient wallet balance. Required $${totalAmount.toFixed(
-          2
-        )}`,
+        message:
+          `Insufficient wallet balance. Required $${totalAmount.toFixed(
+            2
+          )}`,
       });
     }
 
@@ -516,63 +597,98 @@ const createOrder = async (req, res) => {
     // =================================================
 
     wallet.balance =
-      Number(wallet.balance) - totalAmount;
+      Number(wallet.balance) -
+      totalAmount;
 
-    await wallet.save({ session });
+    await wallet.save({
+      session,
+    });
 
     // =================================================
     // CREATE ORDER
     // =================================================
 
-    const order = await Order.create(
-      [
+    const order =
+      await Order.create(
+        [
+          {
+            user: userId,
+
+            pack: pack._id,
+
+            quantity: qty,
+
+            amount:
+              totalAmount,
+
+            paymentStatus:
+              "PAID",
+
+            orderStatus:
+              "COMPLETED",
+
+            paymentMethod:
+              "WALLET",
+          },
+        ],
         {
-          user: userId,
-          pack: pack._id,
-          quantity: qty,
-          amount: totalAmount,
+          session,
+        }
+      );
 
-          paymentStatus: "PAID",
+    // =================================================
+    // CREATE USER PACK
+    // =================================================
 
-          // Keep this if your Order model has it
-         orderStatus: "COMPLETED",
+    // Total physical cards in ONE pack
+    const cardsPerPack =
+      pack.cards.reduce(
+        (
+          total,
+          packCard
+        ) =>
+          total +
+          Number(
+            packCard.quantity || 0
+          ),
+        0
+      );
 
-          paymentMethod: "WALLET",
-        },
-      ],
-      { session }
-    );
+    // Multiply by purchased quantity
+    const cardsTotal =
+      cardsPerPack * qty;
 
-// =====================================================
-// CREATE USER PACK
-// =====================================================
+    const cardsRemaining =
+      cardsTotal;
 
-// Total physical cards available inside the pack
-const cardsTotal = pack.cards.reduce(
-  (total, packCard) =>
-    total + Number(packCard.quantity || 0),
-  0
-);
+    const createdUserPacks =
+      await UserPack.create(
+        [
+          {
+            user: userId,
 
-const cardsRemaining = cardsTotal;
+            pack: pack._id,
 
-await UserPack.create(
-  [
-    {
-      user: userId,
-      pack: pack._id,
-      quantity: qty,
+            quantity: qty,
 
-      cardsTotal,
-      cardsRemaining,
-      cardsRipped: 0,
+            cardsTotal,
 
-      status: "AVAILABLE",
-    },
-  ],
-  { session }
-);
+            cardsRemaining,
 
+            cardsRipped: 0,
+
+            status:
+              "AVAILABLE",
+          },
+        ],
+        {
+          session,
+        }
+      );
+
+    // Get newly created UserPack
+    const userPack =
+      createdUserPacks[0];
 
     // =================================================
     // WALLET TRANSACTION
@@ -582,13 +698,22 @@ await UserPack.create(
       [
         {
           user: userId,
+
           type: "PURCHASE",
-          amount: totalAmount,
-          status: "APPROVED",
-          note: `Purchased ${qty} x ${pack.name}`,
+
+          amount:
+            totalAmount,
+
+          status:
+            "APPROVED",
+
+          note:
+            `Purchased ${qty} x ${pack.name}`,
         },
       ],
-      { session }
+      {
+        session,
+      }
     );
 
     // =================================================
@@ -597,19 +722,83 @@ await UserPack.create(
 
     await session.commitTransaction();
 
+    // =================================================
+    // RESPONSE
+    // =================================================
+
     return res.status(201).json({
       success: true,
-      message: "Pack purchased successfully",
+
+      message:
+        "Pack purchased successfully",
 
       data: {
-        order: order[0],
-        walletBalance: wallet.balance,
+        // Order
+
+        order:
+          order[0],
+
+        // =================================================
+        // USER PACK
+        // =================================================
+
+        userPack: {
+          _id:
+            userPack._id,
+
+          user:
+            userPack.user,
+
+          pack:
+            userPack.pack,
+
+          quantity:
+            userPack.quantity,
+
+          cardsTotal:
+            userPack.cardsTotal,
+
+          cardsRemaining:
+            userPack.cardsRemaining,
+
+          cardsRipped:
+            userPack.cardsRipped,
+
+          status:
+            userPack.status,
+
+          purchasedAt:
+            userPack.purchasedAt,
+        },
+
+        // =================================================
+        // DIRECT USER PACK ID
+        // =================================================
+
+        userPackId:
+          userPack._id,
+
+        // =================================================
+        // UPDATED WALLET
+        // =================================================
+
+        walletBalance:
+          Number(
+            wallet.balance
+          ),
       },
     });
 
   } catch (error) {
 
-    await session.abortTransaction();
+    try {
+      await session.abortTransaction();
+    } catch (abortError) {
+      console.error(
+        "Transaction abort error:",
+        abortError
+      );
+    }
 
     console.error(
       "Create order error:",
@@ -618,16 +807,19 @@ await UserPack.create(
 
     return res.status(500).json({
       success: false,
-      message: "Unable to purchase pack",
+      message:
+        "Unable to purchase pack",
     });
 
   } finally {
-    session.endSession();
+
+    await session.endSession();
   }
 };
 
-
-
+// =====================================================
+// EXPORTS
+// =====================================================
 
 module.exports = {
   createTestOrder,

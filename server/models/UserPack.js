@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const userPackSchema = new mongoose.Schema(
   {
+    // =====================================================
+    // USER
+    // =====================================================
+
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -9,45 +13,72 @@ const userPackSchema = new mongoose.Schema(
       index: true,
     },
 
+    // =====================================================
+    // PACK
+    // =====================================================
+
     pack: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Pack",
       required: true,
     },
 
-    // Number of packs purchased
+    // =====================================================
+    // NUMBER OF PACKS PURCHASED
+    // =====================================================
+
     quantity: {
       type: Number,
       default: 1,
       min: 1,
     },
 
-    // Total cards available inside this purchased pack
+    // =====================================================
+    // TOTAL CARDS AVAILABLE
+    // =====================================================
+
     cardsTotal: {
       type: Number,
       default: 0,
       min: 0,
     },
 
-    // Cards still available to rip
+    // =====================================================
+    // CARDS STILL AVAILABLE TO RIP
+    // =====================================================
+
     cardsRemaining: {
       type: Number,
       default: 0,
       min: 0,
     },
 
-    // Cards already revealed
+    // =====================================================
+    // CARDS ALREADY REVEALED
+    // =====================================================
+
     cardsRipped: {
       type: Number,
       default: 0,
       min: 0,
     },
 
+    // =====================================================
+    // USER PACK STATUS
+    // =====================================================
+
     status: {
       type: String,
-      enum: ["AVAILABLE", "COMPLETED"],
+      enum: [
+        "AVAILABLE",
+        "COMPLETED",
+      ],
       default: "AVAILABLE",
     },
+
+    // =====================================================
+    // PURCHASE DATE
+    // =====================================================
 
     purchasedAt: {
       type: Date,
@@ -59,4 +90,11 @@ const userPackSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("UserPack", userPackSchema);
+// =====================================================
+// EXPORT
+// =====================================================
+
+module.exports = mongoose.model(
+  "UserPack",
+  userPackSchema
+);
