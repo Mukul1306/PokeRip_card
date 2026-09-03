@@ -1,190 +1,53 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, {
+  useEffect,
+  useState,
+} from "react";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 
-const SHIPPING_FEE = 5;
-const DECISION_TIME = 5 * 60 * 1000;
+import api from "../services/api";
 
-// =====================================================
-// HELPERS
-// =====================================================
-
-const getToken = () => {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    ""
-  );
-};
 
 // =====================================================
-// MAKE IMAGE URL
+// RIP PAGE
 // =====================================================
 
-const getImageUrl = (image) => {
-  if (!image) {
-    return "";
-  }
-
-  const value = String(image).trim();
-
-  if (!value) {
-    return "";
-  }
-
-  // Already full URL
-  if (
-    value.startsWith("http://") ||
-    value.startsWith("https://") ||
-    value.startsWith("blob:")
-  ) {
-    return value;
-  }
-
-  // Backend relative URL
-  if (value.startsWith("/")) {
-    return `${API_URL}${value}`;
-  }
-
-  return `${API_URL}/${value}`;
-};
-
-// =====================================================
-// GET CARD IMAGE
-// =====================================================
-
-const getCardImage = (card) => {
-  if (!card) {
-    return "";
-  }
-
-  return (
-    card.imageLarge ||
-    card.imageSmall ||
-    card.image ||
-    ""
-  );
-};
-
-// =====================================================
-// NORMALIZE CARD
-// =====================================================
-
-const normalizeCard = (rawCard, rawUserPackCard) => {
-  if (!rawCard && !rawUserPackCard) {
-    return null;
-  }
-
-  const backendCard =
-    rawUserPackCard?.card || {};
-
-  const card = {
-    ...(backendCard || {}),
-    ...(rawCard || {}),
-  };
-
-  const marketPrice =
-    Number(
-      rawUserPackCard?.marketPrice ??
-        rawCard?.marketPrice ??
-        rawCard?.price ??
-        backendCard?.price ??
-        0
-    );
-
-  return {
-    ...card,
-
-    _id:
-      card._id ||
-      card.id ||
-      rawUserPackCard?._id ||
-      "",
-
-    name:
-      card.name ||
-      backendCard.name ||
-      "Unknown Card",
-
-    tcgId:
-      card.tcgId ||
-      backendCard.tcgId ||
-      "",
-
-    imageLarge:
-      card.imageLarge ||
-      backendCard.imageLarge ||
-      card.image ||
-      backendCard.image ||
-      "",
-
-    imageSmall:
-      card.imageSmall ||
-      backendCard.imageSmall ||
-      card.image ||
-      backendCard.image ||
-      "",
-
-    price: marketPrice,
-
-    marketPrice,
-
-    priceCurrency:
-      rawUserPackCard?.priceCurrency ||
-      card.priceCurrency ||
-      backendCard.priceCurrency ||
-      "USD",
-
-    priceSource:
-      rawUserPackCard?.priceSource ||
-      card.priceSource ||
-      backendCard.priceSource ||
-      "",
-
-    priceLastUpdated:
-      rawUserPackCard?.priceLastUpdated ||
-      card.priceLastUpdated ||
-      backendCard.priceLastUpdated ||
-      null,
-  };
-};
-
-// =====================================================
-// COMPONENT
-// =====================================================
-
-export default function RipPage() {
+const RipPage = () => {
   const navigate = useNavigate();
 
-  const { userPackId } = useParams();
+  const { userPackId } =
+    useParams();
 
   // ===================================================
   // STATE
   // ===================================================
 
-  const [pack, setPack] = useState(null);
+  const [loading, setLoading] =
+    useState(false);
+
+  const [ripLoading, setRipLoading] =
+    useState(false);
+
+  const [sellLoading, setSellLoading] =
+    useState(false);
+
+  const [shipLoading, setShipLoading] =
+    useState(false);
+
+  const [card, setCard] =
+    useState(null);
 
   const [userPackCard, setUserPackCard] =
     useState(null);
 
-  const [card, setCard] = useState(null);
+  const [pack, setPack] =
+    useState(null);
 
   const [walletBalance, setWalletBalance] =
     useState(0);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [ripping, setRipping] =
-    useState(false);
-
-  const [selling, setSelling] =
-    useState(false);
-
-  const [shipping, setShipping] =
-    useState(false);
 
   const [error, setError] =
     useState("");
@@ -192,587 +55,505 @@ export default function RipPage() {
   const [success, setSuccess] =
     useState("");
 
+  // ===================================================
+  // TIMER
+  // ===================================================
+
   const [timeLeft, setTimeLeft] =
     useState(0);
 
-  const [showShipping, setShowShipping] =
+  // ===================================================
+  // SHIPPING POPUP
+  // ===================================================
+
+  const [showShippingModal, setShowShippingModal] =
     useState(false);
 
-  const [address, setAddress] =
-    useState("");
-
   // ===================================================
-  // GET TOKEN
+  // SHIPPING ADDRESS
   // ===================================================
 
-  const token = getToken();
+  const [shippingAddress, setShippingAddress] =
+    useState({
+      fullName: "",
+      email: "",
+      phone: "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "India",
+    });
 
   // ===================================================
-  // FETCH USER PACK
+  // LOAD CARD / EXISTING RIP
   // ===================================================
 
-  const fetchPack = async () => {
-    if (!userPackId) {
-      setError("User pack ID is missing");
-      setLoading(false);
-      return;
-    }
+  useEffect(() => {
+    loadRipData();
+  }, [userPackId]);
 
+
+  // ===================================================
+  // LOAD RIP DATA
+  // ===================================================
+
+  const loadRipData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API_URL}/api/user/packs/${userPackId}`,
-        {
-          method: "GET",
-
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-            "Content-Type":
-              "application/json",
-          },
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Unable to load pack"
+      const response =
+        await api.get(
+          `/api/rip/${userPackId}`
         );
-      }
 
-      const userPack =
-        data.data?.userPack ||
-        data.data?.pack ||
-        data.data;
+      if (
+        response?.data?.success
+      ) {
+        const data =
+          response.data.data || {};
 
-      setPack(userPack || null);
+        setCard(
+          data.card || null
+        );
 
-      // =================================================
-      // LOOK FOR EXISTING REVEALED CARD
-      // =================================================
-
-      const existingCard =
-        data.data?.userPackCard ||
-        data.data?.revealedCard ||
-        null;
-
-      if (existingCard) {
         setUserPackCard(
-          existingCard
+          data.userPackCard || null
         );
 
-        const normalized =
-          normalizeCard(
-            existingCard.card,
-            existingCard
-          );
+        setPack(
+          data.pack || null
+        );
 
-        setCard(normalized);
+        setWalletBalance(
+          Number(
+            data.walletBalance || 0
+          )
+        );
+
+        // ------------------------------------------------
+        // EXISTING SHIPPING ADDRESS
+        // ------------------------------------------------
 
         if (
-          existingCard.decisionDeadline
+          data.userPackCard
+            ?.shippingAddress
         ) {
-          const remaining =
-            new Date(
-              existingCard.decisionDeadline
-            ).getTime() -
-            Date.now();
+          setShippingAddress({
+            fullName:
+              data.userPackCard
+                .shippingAddress
+                ?.fullName || "",
 
-          setTimeLeft(
-            Math.max(
-              0,
-              remaining
-            )
+            email:
+              data.userPackCard
+                .shippingAddress
+                ?.email || "",
+
+            phone:
+              data.userPackCard
+                .shippingAddress
+                ?.phone || "",
+
+            addressLine1:
+              data.userPackCard
+                .shippingAddress
+                ?.addressLine1 || "",
+
+            addressLine2:
+              data.userPackCard
+                .shippingAddress
+                ?.addressLine2 || "",
+
+            city:
+              data.userPackCard
+                .shippingAddress
+                ?.city || "",
+
+            state:
+              data.userPackCard
+                .shippingAddress
+                ?.state || "",
+
+            postalCode:
+              data.userPackCard
+                .shippingAddress
+                ?.postalCode || "",
+
+            country:
+              data.userPackCard
+                .shippingAddress
+                ?.country ||
+              "India",
+          });
+        }
+
+        // ------------------------------------------------
+        // TIMER
+        // ------------------------------------------------
+
+        if (
+          data.userPackCard
+            ?.decisionDeadline
+        ) {
+          updateTimer(
+            data.userPackCard
+              .decisionDeadline
           );
         }
       }
+
     } catch (err) {
       console.error(
-        "Fetch pack error:",
+        "Load RIP data error:",
         err
       );
 
       setError(
-        err.message ||
-          "Unable to load pack"
+        err?.response?.data
+          ?.message ||
+        "Unable to load RIP page"
       );
+
     } finally {
       setLoading(false);
     }
   };
 
-  // ===================================================
-  // INITIAL LOAD
-  // ===================================================
-
-  useEffect(() => {
-    fetchPack();
-  }, [userPackId]);
 
   // ===================================================
-  // RIP ONE CARD
+  // TIMER UPDATE
   // ===================================================
 
-  const handleRip = async () => {
-    if (!userPackId) {
-      setError(
-        "User pack ID is missing"
+  const updateTimer = (
+    deadline
+  ) => {
+    const end =
+      new Date(
+        deadline
+      ).getTime();
+
+    const now =
+      Date.now();
+
+    const remaining =
+      Math.max(
+        0,
+        end - now
       );
 
-      return;
-    }
-
-    if (ripping) {
-      return;
-    }
-
-    try {
-      setRipping(true);
-
-      setError("");
-      setSuccess("");
-
-      const response =
-        await fetch(
-          `${API_URL}/api/rip/${userPackId}`,
-          {
-            method: "POST",
-
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Unable to rip card"
-        );
-      }
-
-      console.log(
-        "RIP RESPONSE:",
-        data
-      );
-
-      // =================================================
-      // BACKEND RESPONSE
-      // =================================================
-
-      const revealedCard =
-        data.data?.card ||
-        data.card ||
-        null;
-
-      const returnedUserPackCard =
-        data.data?.userPackCard ||
-        null;
-
-      // =================================================
-      // NORMALIZE CARD
-      // =================================================
-
-      const normalizedCard =
-        normalizeCard(
-          revealedCard,
-          returnedUserPackCard
-        );
-
-      console.log(
-        "NORMALIZED CARD:",
-        normalizedCard
-      );
-
-      console.log(
-        "IMAGE:",
-        normalizedCard?.imageLarge
-      );
-
-      console.log(
-        "IMAGE URL:",
-        getImageUrl(
-          normalizedCard?.imageLarge ||
-            normalizedCard?.imageSmall
-        )
-      );
-
-      console.log(
-        "PRICE:",
-        normalizedCard?.price
-      );
-
-      // =================================================
-      // SAVE STATE
-      // =================================================
-
-      setCard(
-        normalizedCard
-      );
-
-      setUserPackCard(
-        returnedUserPackCard
-      );
-
-      // =================================================
-      // UPDATE PACK
-      // =================================================
-
-      if (data.data?.pack) {
-        setPack(
-          data.data.pack
-        );
-      } else if (
-        data.data?.userPack
-      ) {
-        setPack(
-          data.data.userPack
-        );
-      }
-
-      // =================================================
-      // START 5 MINUTE TIMER
-      // =================================================
-
-      if (
-        returnedUserPackCard?.decisionDeadline
-      ) {
-        const deadline =
-          new Date(
-            returnedUserPackCard.decisionDeadline
-          ).getTime();
-
-        setTimeLeft(
-          Math.max(
-            0,
-            deadline - Date.now()
-          )
-        );
-      } else {
-        setTimeLeft(
-          DECISION_TIME
-        );
-      }
-    } catch (err) {
-      console.error(
-        "Rip error:",
-        err
-      );
-
-      setError(
-        err.message ||
-          "Unable to reveal card"
-      );
-    } finally {
-      setRipping(false);
-    }
+    setTimeLeft(
+      Math.floor(
+        remaining / 1000
+      )
+    );
   };
 
-  // ===================================================
-  // COUNTDOWN
-  // ===================================================
-
-  useEffect(() => {
-    if (!card) {
-      return;
-    }
-
-    if (timeLeft <= 0) {
-      return;
-    }
-
-    const timer =
-      setInterval(() => {
-        setTimeLeft(
-          (previous) =>
-            Math.max(
-              0,
-              previous - 1000
-            )
-        );
-      }, 1000);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [card, timeLeft]);
 
   // ===================================================
-  // AUTO SELL AFTER 5 MINUTES
+  // TIMER INTERVAL
   // ===================================================
 
   useEffect(() => {
-    if (!card) {
-      return;
-    }
-
-    if (!userPackCard) {
-      return;
-    }
-
     if (
-      userPackCard.status !==
-      "REVEALED"
+      !userPackCard
+        ?.decisionDeadline
     ) {
       return;
     }
 
-    if (timeLeft > 0) {
-      return;
-    }
+    const interval =
+      setInterval(() => {
+        updateTimer(
+          userPackCard
+            .decisionDeadline
+        );
+      }, 1000);
 
-    if (selling || shipping) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const autoSell = async () => {
-      if (cancelled) {
-        return;
-      }
-
-      console.log(
-        "5 minute decision window expired. Auto selling card."
+    return () =>
+      clearInterval(
+        interval
       );
-
-      await handleSell(true);
-    };
-
-    autoSell();
-
-    return () => {
-      cancelled = true;
-    };
   }, [
-    timeLeft,
-    card,
     userPackCard,
   ]);
 
-  // ===================================================
-  // CARD PRICE
-  // ===================================================
-
-  const cardPrice = useMemo(() => {
-    if (!card) {
-      return 0;
-    }
-
-    const price =
-      Number(
-        card.marketPrice ??
-          card.price ??
-          0
-      );
-
-    return Number.isFinite(price)
-      ? price
-      : 0;
-  }, [card]);
 
   // ===================================================
-  // USER SELL AMOUNT
+  // FORMAT TIMER
   // ===================================================
 
-  const sellAmount = useMemo(() => {
-    return cardPrice * 0.8;
-  }, [cardPrice]);
-
-  // ===================================================
-  // ADMIN AMOUNT
-  // ===================================================
-
-  const adminAmount = useMemo(() => {
-    return cardPrice * 0.2;
-  }, [cardPrice]);
-
-  // ===================================================
-  // FORMAT TIME
-  // ===================================================
-
-  const formattedTime = useMemo(() => {
-    const totalSeconds =
-      Math.ceil(
-        timeLeft / 1000
-      );
-
+  const formatTime = () => {
     const minutes =
       Math.floor(
-        totalSeconds / 60
+        timeLeft / 60
       );
 
     const seconds =
-      totalSeconds % 60;
+      timeLeft % 60;
 
     return `${String(
       minutes
     ).padStart(2, "0")}:${String(
       seconds
     ).padStart(2, "0")}`;
-  }, [timeLeft]);
+  };
+
 
   // ===================================================
-  // IMAGE
+  // HANDLE ADDRESS CHANGE
   // ===================================================
 
-  const imageUrl = useMemo(() => {
-    if (!card) {
-      return "";
+  const handleAddressChange = (
+    e
+  ) => {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setShippingAddress(
+      (previous) => ({
+        ...previous,
+
+        [name]: value,
+      })
+    );
+  };
+
+
+  // ===================================================
+  // OPEN SHIPPING MODAL
+  // ===================================================
+
+  const openShippingModal = () => {
+    setError("");
+    setSuccess("");
+
+    setShowShippingModal(
+      true
+    );
+  };
+
+
+  // ===================================================
+  // CLOSE SHIPPING MODAL
+  // ===================================================
+
+  const closeShippingModal = () => {
+    if (
+      shipLoading
+    ) {
+      return;
     }
 
-    return getImageUrl(
-      getCardImage(card)
+    setShowShippingModal(
+      false
     );
-  }, [card]);
+  };
+
 
   // ===================================================
-  // IMAGE ERROR FALLBACK
+  // VALIDATE SHIPPING ADDRESS
   // ===================================================
 
-  const [imageError, setImageError] =
-    useState(false);
+  const validateShippingAddress =
+    () => {
+      if (
+        !shippingAddress
+          .fullName
+          .trim()
+      ) {
+        return "Full name is required";
+      }
 
-  useEffect(() => {
-    setImageError(false);
-  }, [imageUrl]);
+      if (
+        !shippingAddress
+          .email
+          .trim()
+      ) {
+        return "Email is required";
+      }
+
+      const emailRegex =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (
+        !emailRegex.test(
+          shippingAddress.email.trim()
+        )
+      ) {
+        return "Please enter a valid email address";
+      }
+
+      if (
+        !shippingAddress
+          .phone
+          .trim()
+      ) {
+        return "Phone number is required";
+      }
+
+      if (
+        !shippingAddress
+          .addressLine1
+          .trim()
+      ) {
+        return "Address is required";
+      }
+
+      if (
+        !shippingAddress
+          .city
+          .trim()
+      ) {
+        return "City is required";
+      }
+
+      if (
+        !shippingAddress
+          .state
+          .trim()
+      ) {
+        return "State is required";
+      }
+
+      if (
+        !shippingAddress
+          .postalCode
+          .trim()
+      ) {
+        return "Postal code is required";
+      }
+
+      if (
+        !shippingAddress
+          .country
+          .trim()
+      ) {
+        return "Country is required";
+      }
+
+      return "";
+    };
+
+
+  // ===================================================
+  // RIP CARD
+  // ===================================================
+
+  const handleRip = async () => {
+    try {
+      setRipLoading(true);
+      setError("");
+      setSuccess("");
+
+      const response =
+        await api.post(
+          `/api/rip/${userPackId}`
+        );
+
+      if (
+        response?.data?.success
+      ) {
+        const data =
+          response.data.data || {};
+
+        setCard(
+          data.card || null
+        );
+
+        setUserPackCard(
+          data.userPackCard || null
+        );
+
+        setPack(
+          data.pack || null
+        );
+
+        if (
+          data.walletBalance !==
+          undefined
+        ) {
+          setWalletBalance(
+            Number(
+              data.walletBalance
+            )
+          );
+        }
+
+        setSuccess(
+          "Card revealed successfully!"
+        );
+      }
+
+    } catch (err) {
+      console.error(
+        "RIP error:",
+        err
+      );
+
+      setError(
+        err?.response?.data
+          ?.message ||
+        "Unable to rip card"
+      );
+
+    } finally {
+      setRipLoading(false);
+    }
+  };
+
 
   // ===================================================
   // SELL CARD
   // ===================================================
 
-  const handleSell = async (
-    automatic = false
-  ) => {
-    if (!userPackId) {
-      return;
-    }
-
-    if (!userPackCard) {
-      return;
-    }
-
-    if (
-      userPackCard.status !==
-      "REVEALED"
-    ) {
-      return;
-    }
-
-    if (
-      !automatic &&
-      timeLeft <= 0
-    ) {
-      setError(
-        "The 5-minute decision window has expired."
-      );
-
-      return;
-    }
-
-    if (selling) {
-      return;
-    }
-
+  const handleSell = async () => {
     try {
-      setSelling(true);
-
+      setSellLoading(true);
       setError("");
       setSuccess("");
 
       const response =
-        await fetch(
-          `${API_URL}/api/rip/${userPackId}/sell`,
-          {
-            method: "POST",
-
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              cardId:
-                card?._id ||
-                card?.id,
-
-              cardPrice:
-                cardPrice,
-            }),
-          }
+        await api.post(
+          `/api/rip/${userPackId}/sell`
         );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Unable to sell card"
-        );
-      }
-
-      // =================================================
-      // UPDATE WALLET
-      // =================================================
 
       if (
-        data.data?.walletBalance !==
-        undefined
+        response?.data?.success
       ) {
-        setWalletBalance(
-          Number(
-            data.data.walletBalance
-          )
+        const data =
+          response.data.data || {};
+
+        if (
+          data.walletBalance !==
+          undefined
+        ) {
+          setWalletBalance(
+            Number(
+              data.walletBalance
+            )
+          );
+        }
+
+        setUserPackCard(
+          (previous) => ({
+            ...(previous || {}),
+            ...(data.userPackCard || {}),
+            status: "SOLD",
+          })
         );
-      }
 
-      // =================================================
-      // UPDATE CARD STATUS
-      // =================================================
-
-      const updatedCard =
-        data.data?.userPackCard;
-
-      setUserPackCard(
-        (previous) => ({
-          ...(previous || {}),
-          ...(updatedCard || {}),
-          status: "SOLD",
-        })
-      );
-
-      if (automatic) {
         setSuccess(
-          `Decision window expired. Card was automatically sold for $${Number(
-            data.data?.soldAmount ??
-              sellAmount
-          ).toFixed(2)}.`
-        );
-      } else {
-        setSuccess(
-          `Card sold successfully. $${Number(
-            data.data?.soldAmount ??
-              sellAmount
+          `Card sold successfully! $${Number(
+            data.soldAmount || 0
           ).toFixed(2)} added to your wallet.`
         );
       }
 
-      setTimeLeft(0);
     } catch (err) {
       console.error(
         "Sell card error:",
@@ -780,630 +561,1449 @@ export default function RipPage() {
       );
 
       setError(
-        err.message ||
-          "Unable to sell card"
+        err?.response?.data
+          ?.message ||
+        "Unable to sell card"
       );
+
     } finally {
-      setSelling(false);
+      setSellLoading(false);
     }
   };
 
+
   // ===================================================
-  // SHIP CARD
+  // CONFIRM SHIPPING
   // ===================================================
 
-  const handleShip = async () => {
-    if (!userPackId) {
-      return;
-    }
-
-    if (!userPackCard) {
-      return;
-    }
-
-    if (
-      userPackCard.status !==
-      "REVEALED"
-    ) {
-      return;
-    }
-
-    if (timeLeft <= 0) {
-      setError(
-        "The 5-minute decision window has expired."
-      );
-
-      return;
-    }
-
-    if (shipping) {
-      return;
-    }
-
-    try {
-      setShipping(true);
-
-      setError("");
-      setSuccess("");
-
-      const response =
-        await fetch(
-          `${API_URL}/api/rip/${userPackId}/ship`,
-          {
-            method: "POST",
-
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              cardId:
-                card?._id ||
-                card?.id,
-
-              address,
-            }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Unable to ship card"
-        );
-      }
-
-      // =================================================
-      // UPDATE WALLET
-      // =================================================
+  const handleConfirmShipping =
+    async () => {
+      const validationError =
+        validateShippingAddress();
 
       if (
-        data.data?.walletBalance !==
-        undefined
+        validationError
       ) {
-        setWalletBalance(
-          Number(
-            data.data.walletBalance
-          )
+        setError(
+          validationError
         );
+
+        return;
       }
 
-      // =================================================
-      // UPDATE STATUS
-      // =================================================
+      // ------------------------------------------------
+      // CHECK $5 LOCALLY
+      // ------------------------------------------------
 
-      const updatedCard =
-        data.data?.userPackCard;
+      if (
+        Number(
+          walletBalance
+        ) < 5
+      ) {
+        setError(
+          "You need at least $5 in your wallet for shipping."
+        );
 
-      setUserPackCard(
-        (previous) => ({
-          ...(previous || {}),
-          ...(updatedCard || {}),
-          status: "SHIPPING",
-        })
-      );
+        return;
+      }
 
-      setShowShipping(false);
+      try {
+        setShipLoading(true);
+        setError("");
+        setSuccess("");
 
-      setSuccess(
-        `Shipping request submitted successfully. $${SHIPPING_FEE.toFixed(
-          2
-        )} shipping fee charged.`
-      );
+        // ------------------------------------------------
+        // SEND COMPLETE ADDRESS
+        // ------------------------------------------------
 
-      setTimeLeft(0);
-    } catch (err) {
-      console.error(
-        "Shipping error:",
-        err
-      );
+        const payload = {
+          fullName:
+            shippingAddress.fullName.trim(),
 
-      setError(
-        err.message ||
-          "Unable to create shipping request"
-      );
-    } finally {
-      setShipping(false);
-    }
-  };
+          email:
+            shippingAddress.email.trim(),
+
+          phone:
+            shippingAddress.phone.trim(),
+
+          addressLine1:
+            shippingAddress.addressLine1.trim(),
+
+          addressLine2:
+            shippingAddress.addressLine2.trim(),
+
+          city:
+            shippingAddress.city.trim(),
+
+          state:
+            shippingAddress.state.trim(),
+
+          postalCode:
+            shippingAddress.postalCode.trim(),
+
+          country:
+            shippingAddress.country.trim(),
+        };
+
+        const response =
+          await api.post(
+            `/api/rip/${userPackId}/ship`,
+            payload
+          );
+
+        if (
+          response?.data?.success
+        ) {
+          const data =
+            response.data.data || {};
+
+          // ----------------------------------------------
+          // UPDATE WALLET
+          // ----------------------------------------------
+
+          if (
+            data.walletBalance !==
+            undefined
+          ) {
+            setWalletBalance(
+              Number(
+                data.walletBalance
+              )
+            );
+          } else {
+            setWalletBalance(
+              (previous) =>
+                Math.max(
+                  0,
+                  Number(
+                    previous
+                  ) - 5
+                )
+            );
+          }
+
+          // ----------------------------------------------
+          // UPDATE CARD STATUS
+          // ----------------------------------------------
+
+          setUserPackCard(
+            (previous) => ({
+              ...(previous || {}),
+              ...(data.userPackCard || {}),
+              status:
+                "SHIPPING",
+            })
+          );
+
+          // ----------------------------------------------
+          // CLOSE POPUP
+          // ----------------------------------------------
+
+          setShowShippingModal(
+            false
+          );
+
+          // ----------------------------------------------
+          // SUCCESS
+          // ----------------------------------------------
+
+          setSuccess(
+            "Card added to shipping successfully!"
+          );
+        }
+
+      } catch (err) {
+        console.error(
+          "Shipping error:",
+          err
+        );
+
+        setError(
+          err?.response?.data
+            ?.message ||
+          "Unable to ship card"
+        );
+
+      } finally {
+        setShipLoading(false);
+      }
+    };
+
+
+  // ===================================================
+  // PRICE
+  // ===================================================
+
+  const cardPrice =
+    Number(
+      card?.marketPrice ??
+      card?.price ??
+      userPackCard?.marketPrice ??
+      0
+    );
+
+
+  // ===================================================
+  // SELL AMOUNT
+  // ===================================================
+
+  const sellAmount =
+    Number(
+      (
+        cardPrice *
+        0.8
+      ).toFixed(2)
+    );
+
+
+  // ===================================================
+  // STATUS
+  // ===================================================
+
+  const cardStatus =
+    userPackCard?.status ||
+    "REVEALED";
+
 
   // ===================================================
   // LOADING
   // ===================================================
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#238bdc]" />
+      <div
+        style={{
+          minHeight:
+            "100vh",
 
-          <p className="font-bold text-gray-600">
-            Loading your pack...
-          </p>
-        </div>
+          display:
+            "flex",
+
+          alignItems:
+            "center",
+
+          justifyContent:
+            "center",
+
+          fontSize:
+            "20px",
+        }}
+      >
+        Loading...
       </div>
     );
   }
 
+
   // ===================================================
-  // RENDER
+  // PAGE
   // ===================================================
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+    <div
+      style={{
+        minHeight:
+          "100vh",
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
+        padding:
+          "40px 20px",
 
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest text-[#238bdc]">
-              POKERIP
-            </p>
+        background:
+          "#f5f5f5",
+      }}
+    >
 
-            <h1 className="mt-2 text-3xl font-black">
-              Rip Your Pack
-            </h1>
-          </div>
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
-          <button
-            type="button"
-            onClick={() =>
-              navigate(-1)
-            }
-            className="rounded-full border border-gray-200 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:bg-gray-100"
-          >
-            Back
-          </button>
+      <div
+        style={{
+          maxWidth:
+            "1100px",
+
+          margin:
+            "0 auto 30px",
+
+          display:
+            "flex",
+
+          justifyContent:
+            "space-between",
+
+          alignItems:
+            "center",
+        }}
+      >
+
+        <button
+          onClick={() =>
+            navigate(-1)
+          }
+          style={{
+            padding:
+              "10px 18px",
+
+            border:
+              "1px solid #ddd",
+
+            borderRadius:
+              "8px",
+
+            background:
+              "#fff",
+
+            cursor:
+              "pointer",
+          }}
+        >
+          ← Back
+        </button>
+
+
+        <div>
+          <strong>
+            Wallet: $
+            {Number(
+              walletBalance
+            ).toFixed(2)}
+          </strong>
         </div>
 
-        {/* =================================================
-            ERROR
-        ================================================= */}
+      </div>
 
-        {error && (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">
-            {error}
-          </div>
-        )}
 
-        {/* =================================================
-            SUCCESS
-        ================================================= */}
+      {/* =================================================
+          ERROR
+      ================================================= */}
 
-        {success && (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-bold text-green-600">
-            {success}
-          </div>
-        )}
+      {error && (
+        <div
+          style={{
+            maxWidth:
+              "700px",
 
-        {/* =================================================
-            RIP AREA
-        ================================================= */}
+            margin:
+              "0 auto 20px",
 
-        {!card ? (
-          <section className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
-            <div className="mx-auto max-w-xl text-center">
+            padding:
+              "14px",
 
-              <div className="mx-auto mb-8 flex h-72 w-56 items-center justify-center rounded-3xl bg-gray-100 shadow-inner">
-                <span className="text-6xl">
-                  ?
-                </span>
-              </div>
+            borderRadius:
+              "8px",
 
-              <h2 className="text-3xl font-black">
-                Ready to Rip?
-              </h2>
+            background:
+              "#ffe5e5",
 
-              <p className="mt-3 text-gray-500">
-                Open your pack and reveal
-                a random card from the
-                available inventory.
-              </p>
+            color:
+              "#b00020",
+          }}
+        >
+          {error}
+        </div>
+      )}
 
-              {pack && (
-                <p className="mt-4 text-sm font-bold text-gray-600">
-                  {pack.name}
-                </p>
-              )}
 
-              <button
-                type="button"
-                onClick={handleRip}
-                disabled={ripping}
-                className="mt-7 w-full rounded-full bg-[#238bdc] px-8 py-4 text-sm font-black text-white shadow-md transition hover:bg-[#177bc9] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {ripping
-                  ? "Opening Pack..."
-                  : "RIP IT"}
-              </button>
-            </div>
-          </section>
+      {/* =================================================
+          SUCCESS
+      ================================================= */}
+
+      {success && (
+        <div
+          style={{
+            maxWidth:
+              "700px",
+
+            margin:
+              "0 auto 20px",
+
+            padding:
+              "14px",
+
+            borderRadius:
+              "8px",
+
+            background:
+              "#e7f8ed",
+
+            color:
+              "#16753b",
+          }}
+        >
+          {success}
+        </div>
+      )}
+
+
+      {/* =================================================
+          CARD
+      ================================================= */}
+
+      <div
+        style={{
+          maxWidth:
+            "700px",
+
+          margin:
+            "0 auto",
+
+          background:
+            "#fff",
+
+          borderRadius:
+            "16px",
+
+          padding:
+            "30px",
+
+          boxShadow:
+            "0 5px 25px rgba(0,0,0,0.08)",
+
+          textAlign:
+            "center",
+        }}
+      >
+
+        {card?.imageLarge ||
+        card?.imageSmall ? (
+          <img
+            src={
+              card.imageLarge ||
+              card.imageSmall
+            }
+            alt={
+              card.name ||
+              "Pokemon Card"
+            }
+            style={{
+              width:
+                "280px",
+
+              maxWidth:
+                "100%",
+
+              borderRadius:
+                "12px",
+
+              marginBottom:
+                "20px",
+            }}
+          />
         ) : (
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-10">
+          <div
+            style={{
+              height:
+                "350px",
 
-            {/* =================================================
-                REVEALED CARD
-            ================================================= */}
+              display:
+                "flex",
 
-            <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+              alignItems:
+                "center",
 
-              {/* CARD IMAGE */}
+              justifyContent:
+                "center",
 
-              <div className="flex min-h-[500px] items-center justify-center rounded-3xl bg-gray-50 p-6">
+              background:
+                "#eee",
 
-                {!imageError &&
-                imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt={
-                      card.name ||
-                      "Revealed Pokémon card"
-                    }
-                    className="max-h-[520px] max-w-full rounded-2xl object-contain shadow-2xl"
-                    onError={(event) => {
-                      console.error(
-                        "Card image failed:",
-                        imageUrl
-                      );
+              borderRadius:
+                "12px",
 
-                      setImageError(
-                        true
-                      );
-
-                      event.currentTarget.style.display =
-                        "none";
-                    }}
-                  />
-                ) : (
-                  <div className="flex h-[420px] w-full max-w-[300px] items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-white">
-                    <div className="text-center px-5">
-                      <p className="text-5xl">
-                        ?
-                      </p>
-
-                      <p className="mt-4 text-sm font-bold text-gray-500">
-                        Card image unavailable
-                      </p>
-
-                      <p className="mt-2 break-all text-xs text-gray-400">
-                        {imageUrl ||
-                          "No image URL returned"}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* CARD INFORMATION */}
-
-              <div>
-
-                <p className="text-xs font-black uppercase tracking-widest text-[#238bdc]">
-                  CARD REVEALED
-                </p>
-
-                <h2 className="mt-3 text-3xl font-black sm:text-4xl">
-                  {card.name}
-                </h2>
-
-                {card.set?.name && (
-                  <p className="mt-2 text-sm font-semibold text-gray-500">
-                    {card.set.name}
-                  </p>
-                )}
-
-                {card.rarity && (
-                  <p className="mt-1 text-sm text-gray-500">
-                    {card.rarity}
-                  </p>
-                )}
-
-                {/* PRICE */}
-
-                <div className="mt-8 rounded-3xl bg-gray-50 p-6">
-
-                  <p className="text-sm font-bold text-gray-500">
-                    Current card value
-                  </p>
-
-                  <p className="mt-2 text-4xl font-black">
-                    $
-                    {cardPrice.toFixed(
-                      2
-                    )}
-                  </p>
-
-                  <p className="mt-1 text-xs text-gray-400">
-                    {card.priceSource ||
-                      "Current market price"}
-                  </p>
-
-                  {/* SELL VALUE */}
-
-                  <div className="mt-5 border-t border-gray-200 pt-5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-gray-500">
-                        Your sell value
-                      </span>
-
-                      <span className="text-xl font-black text-green-600">
-                        $
-                        {sellAmount.toFixed(
-                          2
-                        )}
-                      </span>
-                    </div>
-
-                    <p className="mt-1 text-xs text-gray-400">
-                      You receive 80% of
-                      the card market value.
-                    </p>
-                  </div>
-                </div>
-
-                {/* TIMER */}
-
-                {userPackCard?.status ===
-                  "REVEALED" && (
-                  <div className="mt-6 rounded-3xl border border-orange-200 bg-orange-50 p-5 text-center">
-
-                    <p className="text-xs font-black uppercase tracking-widest text-orange-600">
-                      Decision window
-                    </p>
-
-                    <p className="mt-2 text-4xl font-black text-orange-600">
-                      {formattedTime}
-                    </p>
-
-                    <p className="mt-1 text-xs font-semibold text-orange-500">
-                      Sell or ship within
-                      5 minutes
-                    </p>
-                  </div>
-                )}
-
-                {/* SOLD */}
-
-                {userPackCard?.status ===
-                  "SOLD" && (
-                  <div className="mt-6 rounded-3xl border border-green-200 bg-green-50 p-5">
-                    <p className="font-black text-green-700">
-                      Card Sold
-                    </p>
-
-                    <p className="mt-1 text-sm text-green-600">
-                      $
-                      {sellAmount.toFixed(
-                        2
-                      )}{" "}
-                      was credited to your
-                      wallet.
-                    </p>
-                  </div>
-                )}
-
-                {/* SHIPPING */}
-
-                {userPackCard?.status ===
-                  "SHIPPING" && (
-                  <div className="mt-6 rounded-3xl border border-blue-200 bg-blue-50 p-5">
-                    <p className="font-black text-blue-700">
-                      Card Added to Shipping
-                    </p>
-
-                    <p className="mt-1 text-sm text-blue-600">
-                      $5.00 shipping fee
-                      charged.
-                    </p>
-                  </div>
-                )}
-
-                {/* ACTION BUTTONS */}
-
-                {userPackCard?.status ===
-                  "REVEALED" &&
-                  timeLeft > 0 && (
-                  <div className="mt-7 grid gap-3 sm:grid-cols-2">
-
-                    {/* SELL */}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSell(
-                          false
-                        )
-                      }
-                      disabled={
-                        selling ||
-                        shipping
-                      }
-                      className="rounded-full bg-green-600 px-6 py-4 text-sm font-black text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {selling
-                        ? "Selling..."
-                        : `RIPiT — SELL $${sellAmount.toFixed(
-                            2
-                          )}`}
-                    </button>
-
-                    {/* SHIP */}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowShipping(
-                          true
-                        )
-                      }
-                      disabled={
-                        selling ||
-                        shipping
-                      }
-                      className="rounded-full border-2 border-[#238bdc] bg-white px-6 py-4 text-sm font-black text-[#238bdc] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      SHIP — $5
-                    </button>
-                  </div>
-                )}
-
-                {/* WALLET */}
-
-                <div className="mt-7 rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-gray-500">
-                      Wallet balance
-                    </span>
-
-                    <span className="text-lg font-black">
-                      $
-                      {Number(
-                        walletBalance
-                      ).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </section>
+              marginBottom:
+                "20px",
+            }}
+          >
+            No card image
+          </div>
         )}
 
+
+        <h1>
+          {card?.name ||
+            "Pokemon Card"}
+        </h1>
+
+
+        {card?.set?.name && (
+          <p>
+            Set:{" "}
+            {card.set.name}
+          </p>
+        )}
+
+
+        {card?.rarity && (
+          <p>
+            Rarity:{" "}
+            {card.rarity}
+          </p>
+        )}
+
+
         {/* =================================================
-            SHIPPING MODAL
+            PRICE
         ================================================= */}
 
-        {showShipping && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div
+          style={{
+            margin:
+              "20px 0",
+          }}
+        >
 
-            <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+          <div
+            style={{
+              fontSize:
+                "15px",
 
-              <div className="flex items-start justify-between">
+              color:
+                "#777",
+            }}
+          >
+            Current Card Value
+          </div>
 
-                <div>
-                  <h3 className="text-2xl font-black">
-                    Ship Card
-                  </h3>
+          <div
+            style={{
+              fontSize:
+                "32px",
 
-                  <p className="mt-1 text-sm text-gray-500">
-                    Shipping fee: $5.00
-                  </p>
-                </div>
+              fontWeight:
+                "700",
+            }}
+          >
+            $
+            {cardPrice.toFixed(
+              2
+            )}
+          </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowShipping(
-                      false
-                    )
-                  }
-                  className="text-2xl font-bold text-gray-400 hover:text-gray-700"
-                >
-                  ×
-                </button>
-              </div>
+        </div>
 
-              {/* ADDRESS */}
 
-              <div className="mt-6">
+        {/* =================================================
+            TIMER
+        ================================================= */}
 
-                <label className="text-sm font-black text-gray-700">
-                  Shipping address
-                </label>
+        {cardStatus ===
+          "REVEALED" && (
+          <div
+            style={{
+              margin:
+                "20px 0",
 
-                <textarea
-                  value={address}
-                  onChange={(event) =>
-                    setAddress(
-                      event.target
-                        .value
-                    )
-                  }
-                  rows={5}
-                  placeholder="Enter your complete shipping address"
-                  className="mt-2 w-full rounded-2xl border border-gray-200 p-4 text-sm outline-none focus:border-[#238bdc]"
-                />
-              </div>
+              padding:
+                "15px",
 
-              {/* FEE */}
+              borderRadius:
+                "10px",
 
-              <div className="mt-5 rounded-2xl bg-gray-50 p-4">
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-gray-500">
-                    Shipping fee
-                  </span>
+              background:
+                "#fff5d6",
+            }}
+          >
 
-                  <span className="font-black">
-                    $5.00
-                  </span>
-                </div>
-
-                <div className="mt-2 flex justify-between border-t border-gray-200 pt-2">
-                  <span className="text-sm font-bold text-gray-500">
-                    Wallet after shipping
-                  </span>
-
-                  <span className="font-black">
-                    $
-                    {Math.max(
-                      0,
-                      Number(
-                        walletBalance
-                      ) -
-                        SHIPPING_FEE
-                    ).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {/* BUTTONS */}
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowShipping(
-                      false
-                    )
-                  }
-                  className="rounded-full border border-gray-200 px-6 py-4 text-sm font-black text-gray-600 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  onClick={
-                    handleShip
-                  }
-                  disabled={
-                    shipping ||
-                    !address.trim()
-                  }
-                  className="rounded-full bg-[#238bdc] px-6 py-4 text-sm font-black text-white hover:bg-[#177bc9] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {shipping
-                    ? "Processing..."
-                    : "Confirm Ship — $5"}
-                </button>
-
-              </div>
-
+            <div>
+              Decision time remaining
             </div>
+
+            <strong
+              style={{
+                fontSize:
+                  "28px",
+              }}
+            >
+              {formatTime()}
+            </strong>
+
+          </div>
+        )}
+
+
+        {/* =================================================
+            SELL / SHIP
+        ================================================= */}
+
+        {cardStatus ===
+          "REVEALED" && (
+          <div
+            style={{
+              display:
+                "flex",
+
+              gap:
+                "12px",
+
+              justifyContent:
+                "center",
+
+              flexWrap:
+                "wrap",
+
+              marginTop:
+                "25px",
+            }}
+          >
+
+            {/* ============================================
+                SELL
+            ============================================ */}
+
+            <button
+              disabled={
+                sellLoading ||
+                shipLoading ||
+                timeLeft <= 0
+              }
+              onClick={
+                handleSell
+              }
+              style={{
+                padding:
+                  "14px 28px",
+
+                border:
+                  "none",
+
+                borderRadius:
+                  "10px",
+
+                background:
+                  "#222",
+
+                color:
+                  "#fff",
+
+                cursor:
+                  "pointer",
+
+                fontSize:
+                  "16px",
+              }}
+            >
+              {sellLoading
+                ? "Selling..."
+                : `Sell for $${sellAmount.toFixed(
+                    2
+                  )}`}
+            </button>
+
+
+            {/* ============================================
+                SHIP
+            ============================================ */}
+
+            <button
+              disabled={
+                sellLoading ||
+                shipLoading ||
+                timeLeft <= 0
+              }
+              onClick={
+                openShippingModal
+              }
+              style={{
+                padding:
+                  "14px 28px",
+
+                border:
+                  "none",
+
+                borderRadius:
+                  "10px",
+
+                background:
+                  "#1976d2",
+
+                color:
+                  "#fff",
+
+                cursor:
+                  "pointer",
+
+                fontSize:
+                  "16px",
+              }}
+            >
+              Ship Card - $5
+            </button>
+
+          </div>
+        )}
+
+
+        {/* =================================================
+            SOLD
+        ================================================= */}
+
+        {cardStatus ===
+          "SOLD" && (
+          <div
+            style={{
+              marginTop:
+                "25px",
+
+              padding:
+                "16px",
+
+              borderRadius:
+                "10px",
+
+              background:
+                "#e7f8ed",
+
+              color:
+                "#16753b",
+
+              fontWeight:
+                "600",
+            }}
+          >
+            Card sold successfully.
+          </div>
+        )}
+
+
+        {/* =================================================
+            SHIPPING
+        ================================================= */}
+
+        {cardStatus ===
+          "SHIPPING" && (
+          <div
+            style={{
+              marginTop:
+                "25px",
+
+              padding:
+                "16px",
+
+              borderRadius:
+                "10px",
+
+              background:
+                "#e8f1ff",
+
+              color:
+                "#1757a6",
+
+              fontWeight:
+                "600",
+            }}
+          >
+            Card is being prepared for shipping.
+          </div>
+        )}
+
+
+        {/* =================================================
+            SHIPPED
+        ================================================= */}
+
+        {cardStatus ===
+          "SHIPPED" && (
+          <div
+            style={{
+              marginTop:
+                "25px",
+
+              padding:
+                "16px",
+
+              borderRadius:
+                "10px",
+
+              background:
+                "#e7f8ed",
+
+              color:
+                "#16753b",
+
+              fontWeight:
+                "600",
+            }}
+          >
+            Card has been shipped.
           </div>
         )}
 
       </div>
-    </main>
+
+
+      {/* ===================================================
+          SHIPPING ADDRESS MODAL
+      =================================================== */}
+
+      {showShippingModal && (
+        <div
+          style={{
+            position:
+              "fixed",
+
+            inset:
+              0,
+
+            background:
+              "rgba(0,0,0,0.6)",
+
+            display:
+              "flex",
+
+            alignItems:
+              "center",
+
+            justifyContent:
+              "center",
+
+            padding:
+              "20px",
+
+            zIndex:
+              9999,
+          }}
+        >
+
+          <div
+            style={{
+              width:
+                "100%",
+
+              maxWidth:
+                "650px",
+
+              maxHeight:
+                "90vh",
+
+              overflowY:
+                "auto",
+
+              background:
+                "#fff",
+
+              borderRadius:
+                "16px",
+
+              padding:
+                "25px",
+
+              boxShadow:
+                "0 10px 40px rgba(0,0,0,0.25)",
+            }}
+          >
+
+            {/* ===========================================
+                MODAL HEADER
+            =========================================== */}
+
+            <div
+              style={{
+                display:
+                  "flex",
+
+                justifyContent:
+                  "space-between",
+
+                alignItems:
+                  "center",
+
+                marginBottom:
+                  "20px",
+              }}
+            >
+
+              <h2
+                style={{
+                  margin:
+                    0,
+                }}
+              >
+                Shipping Address
+              </h2>
+
+              <button
+                onClick={
+                  closeShippingModal
+                }
+                disabled={
+                  shipLoading
+                }
+                style={{
+                  border:
+                    "none",
+
+                  background:
+                    "transparent",
+
+                  fontSize:
+                    "25px",
+
+                  cursor:
+                    "pointer",
+                }}
+              >
+                ×
+              </button>
+
+            </div>
+
+
+            {/* ===========================================
+                SHIPPING INFO
+            =========================================== */}
+
+            <div
+              style={{
+                padding:
+                  "14px",
+
+                marginBottom:
+                  "20px",
+
+                background:
+                  "#fff7e6",
+
+                borderRadius:
+                  "10px",
+              }}
+            >
+
+              <strong>
+                Shipping Fee: $5.00
+              </strong>
+
+              <div
+                style={{
+                  marginTop:
+                    "5px",
+
+                  fontSize:
+                    "14px",
+
+                  color:
+                    "#666",
+                }}
+              >
+                Your current wallet balance:
+                {" "}
+                $
+                {Number(
+                  walletBalance
+                ).toFixed(2)}
+              </div>
+
+            </div>
+
+
+            {/* ===========================================
+                FORM
+            =========================================== */}
+
+            <div
+              style={{
+                display:
+                  "grid",
+
+                gap:
+                  "14px",
+              }}
+            >
+
+              {/* FULL NAME */}
+
+              <div>
+                <label>
+                  Full Name *
+                </label>
+
+                <input
+                  type="text"
+                  name="fullName"
+                  value={
+                    shippingAddress.fullName
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Enter full name"
+                  autoComplete="name"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* EMAIL */}
+
+              <div>
+                <label>
+                  Email *
+                </label>
+
+                <input
+                  type="email"
+                  name="email"
+                  value={
+                    shippingAddress.email
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Enter email address"
+                  autoComplete="email"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* PHONE */}
+
+              <div>
+                <label>
+                  Contact / Phone *
+                </label>
+
+                <input
+                  type="tel"
+                  name="phone"
+                  value={
+                    shippingAddress.phone
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Enter phone number"
+                  autoComplete="tel"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* ADDRESS LINE 1 */}
+
+              <div>
+                <label>
+                  Address Line 1 *
+                </label>
+
+                <input
+                  type="text"
+                  name="addressLine1"
+                  value={
+                    shippingAddress.addressLine1
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="House number, street, area"
+                  autoComplete="street-address"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* ADDRESS LINE 2 */}
+
+              <div>
+                <label>
+                  Address Line 2
+                </label>
+
+                <input
+                  type="text"
+                  name="addressLine2"
+                  value={
+                    shippingAddress.addressLine2
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Apartment, landmark, etc. (optional)"
+                  autoComplete="address-line2"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* CITY */}
+
+              <div>
+                <label>
+                  City *
+                </label>
+
+                <input
+                  type="text"
+                  name="city"
+                  value={
+                    shippingAddress.city
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Enter city"
+                  autoComplete="address-level2"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* STATE */}
+
+              <div>
+                <label>
+                  State *
+                </label>
+
+                <input
+                  type="text"
+                  name="state"
+                  value={
+                    shippingAddress.state
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Enter state"
+                  autoComplete="address-level1"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* POSTAL CODE */}
+
+              <div>
+                <label>
+                  Postal / PIN Code *
+                </label>
+
+                <input
+                  type="text"
+                  name="postalCode"
+                  value={
+                    shippingAddress.postalCode
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Enter postal code"
+                  autoComplete="postal-code"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+
+              {/* COUNTRY */}
+
+              <div>
+                <label>
+                  Country *
+                </label>
+
+                <input
+                  type="text"
+                  name="country"
+                  value={
+                    shippingAddress.country
+                  }
+                  onChange={
+                    handleAddressChange
+                  }
+                  placeholder="Enter country"
+                  autoComplete="country-name"
+                  style={{
+                    width:
+                      "100%",
+
+                    padding:
+                      "12px",
+
+                    marginTop:
+                      "6px",
+
+                    border:
+                      "1px solid #ccc",
+
+                    borderRadius:
+                      "8px",
+
+                    boxSizing:
+                      "border-box",
+                  }}
+                />
+              </div>
+
+            </div>
+
+
+            {/* ===========================================
+                MODAL ERROR
+            =========================================== */}
+
+            {error && (
+              <div
+                style={{
+                  marginTop:
+                    "15px",
+
+                  padding:
+                    "12px",
+
+                  borderRadius:
+                    "8px",
+
+                  background:
+                    "#ffe5e5",
+
+                  color:
+                    "#b00020",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+
+            {/* ===========================================
+                BUTTONS
+            =========================================== */}
+
+            <div
+              style={{
+                display:
+                  "flex",
+
+                gap:
+                  "12px",
+
+                marginTop:
+                  "25px",
+
+                justifyContent:
+                  "flex-end",
+              }}
+            >
+
+              <button
+                type="button"
+                onClick={
+                  closeShippingModal
+                }
+                disabled={
+                  shipLoading
+                }
+                style={{
+                  padding:
+                    "12px 20px",
+
+                  border:
+                    "1px solid #ccc",
+
+                  borderRadius:
+                    "8px",
+
+                  background:
+                    "#fff",
+
+                  cursor:
+                    "pointer",
+                }}
+              >
+                Cancel
+              </button>
+
+
+              <button
+                type="button"
+                onClick={
+                  handleConfirmShipping
+                }
+                disabled={
+                  shipLoading
+                }
+                style={{
+                  padding:
+                    "12px 20px",
+
+                  border:
+                    "none",
+
+                  borderRadius:
+                    "8px",
+
+                  background:
+                    "#1976d2",
+
+                  color:
+                    "#fff",
+
+                  cursor:
+                    "pointer",
+
+                  fontWeight:
+                    "600",
+                }}
+              >
+                {shipLoading
+                  ? "Processing..."
+                  : "Confirm Shipping - $5"}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+    </div>
   );
-}
+};
+
+export default RipPage;

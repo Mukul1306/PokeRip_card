@@ -1,17 +1,36 @@
 const express = require("express");
 
-const router = express.Router();
+const router =
+  express.Router();
 
-const adminOnly = require("../middleware/adminOnly");
+const adminOnly =
+  require("../middleware/adminOnly");
 
 const {
   getWalletRequests,
+  getAdminWalletSummary,
   approveWalletRequest,
   rejectWalletRequest,
 } = require("../controllers/adminWalletController");
 
+
+// =====================================================
+// ADMIN WALLET SUMMARY
+//
+// GET /api/admin/wallet/summary
+// =====================================================
+
+router.get(
+  "/summary",
+  adminOnly,
+  getAdminWalletSummary
+);
+
+
 // =====================================================
 // GET WALLET REQUESTS
+//
+// GET /api/admin/wallet/requests
 // =====================================================
 
 router.get(
@@ -20,8 +39,11 @@ router.get(
   getWalletRequests
 );
 
+
 // =====================================================
 // APPROVE
+//
+// PUT /api/admin/wallet/requests/:id/approve
 // =====================================================
 
 router.put(
@@ -30,8 +52,11 @@ router.put(
   approveWalletRequest
 );
 
+
 // =====================================================
 // REJECT
+//
+// PUT /api/admin/wallet/requests/:id/reject
 // =====================================================
 
 router.put(
@@ -40,4 +65,10 @@ router.put(
   rejectWalletRequest
 );
 
-module.exports = router;
+
+// =====================================================
+// EXPORT
+// =====================================================
+
+module.exports =
+  router;

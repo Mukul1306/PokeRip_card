@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Package,
   PackageCheck,
-  Settings,
   ShoppingBag,
   Sparkles,
     ShieldCheck,
@@ -70,8 +69,8 @@ const navigation = [
     icon: PackageCheck,
   },
   {
-    label: "Redemptions",
-    path: "/admin/redemptions",
+    label: "Selling",
+    path: "/admin/selling",
     icon: WalletCards,
   },
   {
@@ -84,11 +83,11 @@ const navigation = [
     path: "/admin/reports",
     icon: BarChart3,
   },
-  {
-    label: "Settings",
-    path: "/admin/settings",
-    icon: Settings,
-  },
+  // {
+  //   label: "Settings",
+  //   path: "/admin/settings",
+  //   icon: Settings,
+  // },
 ];
 
 export default function AdminSidebar() {

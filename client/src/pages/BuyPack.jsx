@@ -279,6 +279,27 @@ export default function BuyPack() {
 
 
   // =====================================================
+  // SHIPPING ADDRESS MODAL
+  // =====================================================
+
+  const [showShippingModal, setShowShippingModal] =
+    useState(false);
+
+  const [shippingAddress, setShippingAddress] =
+    useState({
+      fullName: "",
+      email: "",
+      phone: "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "",
+    });
+
+
+  // =====================================================
   // IMAGE STATE
   // =====================================================
 
@@ -1037,7 +1058,7 @@ export default function BuyPack() {
   // =====================================================
 
   const handleShip =
-    async () => {
+    () => {
       if (
         !userPackId ||
         !userPackCard
@@ -1045,14 +1066,12 @@ export default function BuyPack() {
         return;
       }
 
-
       if (
         userPackCard.status !==
         "REVEALED"
       ) {
         return;
       }
-
 
       if (
         timeLeft <= 0
@@ -1064,25 +1083,85 @@ export default function BuyPack() {
         return;
       }
 
+      if (
+        Number(walletBalance) < 5
+      ) {
+        setError(
+          "You need at least $5.00 in your wallet to ship this card."
+        );
 
-      if (actionLoading) {
         return;
       }
 
+      setError("");
+      setActionMessage("");
+      setShowShippingModal(true);
+    };
+
+
+  // =====================================================
+  // SHIPPING ADDRESS INPUT
+  // =====================================================
+
+  const handleShippingAddressChange =
+    (event) => {
+      const { name, value } = event.target;
+
+      setShippingAddress(
+        (previous) => ({
+          ...previous,
+          [name]: value,
+        })
+      );
+    };
+
+
+  // =====================================================
+  // CONFIRM SHIPPING
+  // =====================================================
+
+  const handleConfirmShip =
+    async (event) => {
+      event.preventDefault();
+
+      if (
+        !userPackId ||
+        !userPackCard ||
+        actionLoading
+      ) {
+        return;
+      }
+
+      const requiredFields = [
+        ["fullName", "Full name"],
+        ["email", "Email"],
+        ["phone", "Phone number"],
+        ["addressLine1", "Address"],
+        ["city", "City"],
+        ["state", "State"],
+        ["postalCode", "Postal/PIN code"],
+        ["country", "Country"],
+      ];
+
+      for (const [field, label] of requiredFields) {
+        if (!String(shippingAddress[field] || "").trim()) {
+          setError(`${label} is required`);
+          return;
+        }
+      }
+
+      if (Number(walletBalance) < 5) {
+        setError("Insufficient wallet balance for the $5 shipping fee.");
+        return;
+      }
 
       try {
         setActionLoading(true);
-
         setError("");
-
         setActionMessage("");
 
-
         const token =
-          localStorage.getItem(
-            "token"
-          );
-
+          localStorage.getItem("token");
 
         const response =
           await fetch(
@@ -1091,16 +1170,26 @@ export default function BuyPack() {
               method: "POST",
 
               headers: {
-                Authorization:
-                  `Bearer ${token}`,
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
               },
+
+              body: JSON.stringify({
+                fullName: shippingAddress.fullName.trim(),
+                email: shippingAddress.email.trim(),
+                phone: shippingAddress.phone.trim(),
+                addressLine1: shippingAddress.addressLine1.trim(),
+                addressLine2: shippingAddress.addressLine2.trim(),
+                city: shippingAddress.city.trim(),
+                state: shippingAddress.state.trim(),
+                postalCode: shippingAddress.postalCode.trim(),
+                country: shippingAddress.country.trim(),
+              }),
             }
           );
 
-
         const data =
           await response.json();
-
 
         if (!response.ok) {
           throw new Error(
@@ -1109,43 +1198,35 @@ export default function BuyPack() {
           );
         }
 
-
-        // ---------------------------------------------
-        // UPDATE WALLET
-        // ---------------------------------------------
-
         if (
-          data.data
-            ?.walletBalance !==
+          data.data?.walletBalance !==
           undefined
         ) {
           setWalletBalance(
-            Number(
-              data.data
-                .walletBalance
-            )
+            Number(data.data.walletBalance)
+          );
+        } else {
+          setWalletBalance(
+            (previous) => Math.max(0, Number(previous) - 5)
           );
         }
-
-
-        // ---------------------------------------------
-        // UPDATE CARD STATUS
-        // ---------------------------------------------
 
         setUserPackCard(
           (previous) => ({
             ...previous,
-
-            status:
-              "SHIPPING",
+            status: "SHIPPING",
+            shippingFee: 5,
+            shippingAddress:
+              data.data?.userPackCard?.shippingAddress ||
+              shippingAddress,
           })
         );
 
+        setShowShippingModal(false);
 
         setActionMessage(
           "Card has been added to your shipping queue. $5 shipping fee has been charged."
         );
-
       } catch (err) {
         console.error(
           "Ship card error:",
@@ -1156,11 +1237,8 @@ export default function BuyPack() {
           err.message ||
           "Unable to ship card"
         );
-
       } finally {
-        setActionLoading(
-          false
-        );
+        setActionLoading(false);
       }
     };
 
@@ -1802,6 +1880,175 @@ export default function BuyPack() {
             )}
 
           </section>
+
+
+          {/* =====================================================
+              SHIPPING ADDRESS MODAL
+              ===================================================== */}
+
+          {showShippingModal && (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !actionLoading) {
+                  setShowShippingModal(false);
+                }
+              }}
+            >
+              <form
+                onSubmit={handleConfirmShip}
+                className="max-h-[92vh] w-full max-w-[560px] overflow-y-auto rounded-[26px] border border-white/10 bg-[#17171c] p-5 text-white shadow-2xl sm:p-7"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-300">
+                      Shipping Details
+                    </p>
+                    <h2 className="mt-1 text-2xl font-black">
+                      Where should we ship it?
+                    </h2>
+                    <p className="mt-2 text-xs leading-5 text-white/50">
+                      Enter the address where you want this card delivered.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => setShowShippingModal(false)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-lg text-white/70 hover:bg-white/15 disabled:opacity-50"
+                    aria-label="Close shipping address"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  {[
+                    { name: "fullName", label: "Full Name *", placeholder: "Enter full name", type: "text" },
+                    { name: "email", label: "Email *", placeholder: "Enter email address", type: "email" },
+                    { name: "phone", label: "Contact / Phone *", placeholder: "Enter phone number", type: "tel" },
+                    { name: "country", label: "Country *", placeholder: "India", type: "text" },
+                  ].map((field) => (
+                    <label key={field.name} className="block">
+                      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.12em] text-white/50">
+                        {field.label}
+                      </span>
+                      <input
+                        type={field.type}
+                        name={field.name}
+                        value={shippingAddress[field.name]}
+                        onChange={handleShippingAddressChange}
+                        placeholder={field.placeholder}
+                        autoComplete={field.name}
+                        className="h-12 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/25 focus:border-purple-400/60 focus:bg-white/[0.07]"
+                      />
+                    </label>
+                  ))}
+
+                  <label className="block sm:col-span-2">
+                    <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.12em] text-white/50">
+                      Address Line 1 *
+                    </span>
+                    <input
+                      type="text"
+                      name="addressLine1"
+                      value={shippingAddress.addressLine1}
+                      onChange={handleShippingAddressChange}
+                      placeholder="House / Flat / Street address"
+                      autoComplete="address-line1"
+                      className="h-12 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/25 focus:border-purple-400/60 focus:bg-white/[0.07]"
+                    />
+                  </label>
+
+                  <label className="block sm:col-span-2">
+                    <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.12em] text-white/50">
+                      Address Line 2
+                    </span>
+                    <input
+                      type="text"
+                      name="addressLine2"
+                      value={shippingAddress.addressLine2}
+                      onChange={handleShippingAddressChange}
+                      placeholder="Apartment, landmark, area (optional)"
+                      autoComplete="address-line2"
+                      className="h-12 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/25 focus:border-purple-400/60 focus:bg-white/[0.07]"
+                    />
+                  </label>
+
+                  {[
+                    { name: "city", label: "City *", placeholder: "Enter city" },
+                    { name: "state", label: "State *", placeholder: "Enter state" },
+                    { name: "postalCode", label: "PIN / Postal Code *", placeholder: "Enter PIN / postal code" },
+                  ].map((field) => (
+                    <label key={field.name} className="block">
+                      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.12em] text-white/50">
+                        {field.label}
+                      </span>
+                      <input
+                        type="text"
+                        name={field.name}
+                        value={shippingAddress[field.name]}
+                        onChange={handleShippingAddressChange}
+                        placeholder={field.placeholder}
+                        autoComplete={field.name === "postalCode" ? "postal-code" : field.name}
+                        className="h-12 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/25 focus:border-purple-400/60 focus:bg-white/[0.07]"
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <div className="mt-6 rounded-[16px] border border-yellow-400/20 bg-yellow-400/10 p-4">
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <span className="font-bold text-white/60">Shipping fee</span>
+                    <span className="font-black text-yellow-300">$5.00</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-4 text-sm">
+                    <span className="font-bold text-white/60">Wallet balance after shipping</span>
+                    <span className="font-black text-white">
+                      ${Math.max(0, Number(walletBalance) - 5).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="mt-4 flex gap-2 rounded-[14px] bg-red-500/10 p-3 text-xs font-bold text-red-300">
+                    <AlertCircle size={15} className="shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => setShowShippingModal(false)}
+                    className="h-12 rounded-full border border-white/10 bg-white/5 text-xs font-black text-white/70 transition hover:bg-white/10 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-xs font-black text-white transition hover:shadow-[0_12px_35px_rgba(124,58,237,0.3)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {actionLoading ? (
+                      <>
+                        <Loader2 size={17} className="animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Truck size={17} />
+                        Confirm Shipping — $5
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
         </div>
 

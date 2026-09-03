@@ -77,15 +77,6 @@ const userPackCardSchema = new mongoose.Schema(
 
     // =================================================
     // 5-MINUTE DECISION DEADLINE
-    //
-    // User has 5 minutes to choose:
-    //
-    // SELL
-    // OR
-    // SHIP
-    //
-    // After this time the card should automatically
-    // be sold and the money credited to the wallet.
     // =================================================
 
     decisionDeadline: {
@@ -105,16 +96,92 @@ const userPackCardSchema = new mongoose.Schema(
 
     // =================================================
     // SHIPPING FEE
-    //
-    // Store the fee charged when user chooses SHIP.
-    // Default is 0 because the fee is only charged
-    // when shipping is selected.
     // =================================================
 
     shippingFee: {
       type: Number,
       default: 0,
       min: 0,
+    },
+
+    // =================================================
+    // SHIPPING ADDRESS
+    // =================================================
+    //
+    // This is saved when the user selects SHIP.
+    //
+    // Example:
+    //
+    // shippingAddress: {
+    //   fullName: "Shubham Sharma",
+    //   email: "example@gmail.com",
+    //   phone: "9876543210",
+    //   addressLine1: "123 Main Street",
+    //   addressLine2: "Near ABC School",
+    //   city: "Jaipur",
+    //   state: "Rajasthan",
+    //   postalCode: "302001",
+    //   country: "India"
+    // }
+    //
+    // =================================================
+
+    shippingAddress: {
+
+      fullName: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      email: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      phone: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      addressLine1: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      addressLine2: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      city: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      state: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      postalCode: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      country: {
+        type: String,
+        default: "India",
+        trim: true,
+      },
+
     },
 
     // =================================================
@@ -132,27 +199,37 @@ const userPackCardSchema = new mongoose.Schema(
   }
 );
 
+
 // =====================================================
 // INDEXES
 // =====================================================
 
-// Quickly find cards waiting for SELL / SHIP decision
+// Quickly find user's cards by status
+
 userPackCardSchema.index({
   user: 1,
   status: 1,
 });
 
-// Useful for the automatic 5-minute expiry scheduler
+
+// =====================================================
+// EXPIRY INDEX
+// =====================================================
+
+// Used by the 5-minute automatic sell scheduler
+
 userPackCardSchema.index({
   status: 1,
   decisionDeadline: 1,
 });
 
+
 // =====================================================
 // MODEL
 // =====================================================
 
-module.exports = mongoose.model(
-  "UserPackCard",
-  userPackCardSchema
-);
+module.exports =
+  mongoose.model(
+    "UserPackCard",
+    userPackCardSchema
+  );

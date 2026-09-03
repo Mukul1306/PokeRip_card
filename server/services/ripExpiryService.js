@@ -124,6 +124,7 @@ const processExpiredRipCards = async () => {
     );
   }
 };
+
 module.exports = {
   processExpiredRipCards,
 };
